@@ -29,7 +29,6 @@ repository and is NOT bundled in any release.** Each user obtains it themselves:
 - Recommended: download from the official site above, or run `./scripts/download-model.sh`
   (a convenience that fetches the canonical copy for your own local use), then place it at
   `AniCompanion/Resources/VRMModel/AliciaSolid.vrm`.
-- Or drop **your own** VRM here and update the model filename in
-  `AniCompanion/App/AppState.swift`.
+- Or drop **your own** VRM here and set **VRM Model Filename** in Settings.
 
 You are responsible for complying with Dwango's terms when you use the model.

@@ -101,7 +101,7 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
 ### VRM Model
 
 - Default model is **Alicia Solid** (download-only — see `ATTRIBUTION.md`); any VRM works. Set the
-  filename in `AppState.swift` (`loadModel(named:)`).
+  filename in Settings (**VRM Model Filename**) after placing it in `Resources/VRMModel/`.
 - Only standard VRM expression presets are required (happy/sad/angry/relaxed + `aa` viseme + blink);
   ARKit Perfect Sync is optional.
 - Default camera: X:0.0, Y:1.0, Z:4.7, LookAtY:0.8 (three-vrm uses +Z forward); tune live with W/S/A/D/Q/E/R/F.

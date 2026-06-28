@@ -31,6 +31,9 @@ final class ThreeVRMCharacterManager: NSObject, ObservableObject, CharacterContr
     /// The WKWebView instance, set by ThreeVRMRenderView after creation.
     var webView: WKWebView?
 
+    /// Whether the three-vrm HTML/JS scene has finished loading.
+    private var isWebViewReady = false
+
     // MARK: - Animation Data
 
     /// Raw JSON data for each animation clip, keyed by name.
@@ -83,13 +86,14 @@ final class ThreeVRMCharacterManager: NSObject, ObservableObject, CharacterContr
     /// Also preloads animation clip JSON data from the Animations folder.
     func loadModel(named filename: String) {
         Log.character("[ThreeVRM] Loading model: \(filename)")
+        isModelLoaded = false
 
         // Preload animation clip data from the bundle.
         preloadAnimationData()
 
-        // The actual VRM loading happens when the webView loads the HTML page
-        // and Swift calls loadVRM via JS. We store the filename for later.
+        // Store the filename for initial WebView startup and later settings changes.
         pendingModelFilename = filename
+        loadPendingModelIfPossible()
     }
 
     /// The filename to load once the webView is ready.
@@ -97,6 +101,13 @@ final class ThreeVRMCharacterManager: NSObject, ObservableObject, CharacterContr
 
     /// Called by ThreeVRMRenderView once the HTML page has finished loading.
     func onWebViewReady() {
+        isWebViewReady = true
+        loadPendingModelIfPossible()
+    }
+
+    private func loadPendingModelIfPossible() {
+        guard isWebViewReady else { return }
+        guard webView != nil else { return }
         guard let filename = pendingModelFilename else { return }
 
         // Construct a file URL that the WKWebView can access.

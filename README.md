@@ -123,11 +123,8 @@ your own local use. See [`ATTRIBUTION.md`](ATTRIBUTION.md) and
 ### Using your own VRM
 
 1. Drop your `.vrm` file into `AniCompanion/Resources/VRMModel/`.
-2. Point the app at it — one line in `AniCompanion/App/AppState.swift` (`initializeServices()`):
-   ```swift
-   characterManager.loadModel(named: "YourModel.vrm")
-   ```
-   (Name the file `AliciaSolid.vrm` and you can skip even this step.)
+2. Open Settings and set **VRM Model Filename** to your file name, for example `YourModel.vrm`.
+   (Name the file `AliciaSolid.vrm` and you can skip this step.)
 3. Rebuild. If the framing is off for your model's proportions, tune the camera live with the
    `W/S/A/D/Q/E/R/F` keys and set the result as the default in `ThreeVRMRenderView`.
 

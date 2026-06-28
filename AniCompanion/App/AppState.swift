@@ -35,6 +35,14 @@ final class AppState: ObservableObject {
     /// The app/character language (UI, persona, and speech recognition). See `AppLanguage`.
     @AppStorage("app_language") var appLanguage: String = AppLanguage.systemDefault.rawValue
 
+    /// VRM model filename under Resources/VRMModel.
+    @AppStorage("vrm_model_filename") var vrmModelFilename: String = "AliciaSolid.vrm"
+
+    private var effectiveVRMModelFilename: String {
+        let filename = vrmModelFilename.trimmingCharacters(in: .whitespacesAndNewlines)
+        return filename.isEmpty ? "AliciaSolid.vrm" : filename
+    }
+
     // MARK: - Owned Objects
 
     /// Manages the VRM character model via three-vrm in a WKWebView.
@@ -135,10 +143,8 @@ final class AppState: ObservableObject {
         // Verify gateway reachability (HTTP health check).
         ws.connect()
 
-        // Load the default VRM character model (Alicia Solid).
-        // The .vrm binary is not committed; run scripts/download-model.sh to fetch it,
-        // or drop your own VRM in Resources/VRMModel and change this filename.
-        characterManager.loadModel(named: "AliciaSolid.vrm")
+        // Load the configured VRM character model from Resources/VRMModel.
+        characterManager.loadModel(named: effectiveVRMModelFilename)
 
         // Trigger launch greeting after model loads.
         controller.triggerLaunchGreeting()
