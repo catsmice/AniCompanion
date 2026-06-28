@@ -1,0 +1,75 @@
+name: AniCompanion
+options:
+  bundleIdPrefix: com.anicompanion
+  deploymentTarget:
+    macOS: "15.0"
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+
+targets:
+  AniCompanion:
+    type: application
+    platform: macOS
+    sources:
+      # Swift app sources
+      - path: AniCompanion
+        excludes:
+          - "Resources/Animations/**"
+          - "Resources/ThreeVRM/**"
+          - "Resources/Persona/**"
+
+      # VRM model resources as a folder reference
+      - path: AniCompanion/Resources/VRMModel
+        type: folder
+        buildPhase: resources
+
+      # Animation clip JSON files as a folder reference
+      - path: AniCompanion/Resources/Animations
+        type: folder
+        buildPhase: resources
+
+      # Three.js + three-vrm HTML/JS scene files
+      - path: AniCompanion/Resources/ThreeVRM
+        type: folder
+        buildPhase: resources
+
+      # Localized character persona (system prompt + proactive prompts) per language
+      - path: AniCompanion/Resources/Persona
+        type: folder
+        buildPhase: resources
+
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.anicompanion.app
+        INFOPLIST_FILE: AniCompanion/Info.plist
+        CODE_SIGN_ENTITLEMENTS: AniCompanion/AniCompanion.entitlements
+        PRODUCT_NAME: AniCompanion
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: false
+        SWIFT_STRICT_CONCURRENCY: complete
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+        COMBINE_HIDPI_IMAGES: YES
+
+        # Bridging header exposing the ObjC exception catcher to Swift
+        SWIFT_OBJC_BRIDGING_HEADER: AniCompanion/ObjCSupport/AniCompanion-Bridging-Header.h
+
+    entitlements:
+      path: AniCompanion/AniCompanion.entitlements
+
+    # System frameworks
+    frameworks:
+      - sdk: Metal.framework
+      - sdk: MetalKit.framework
+      - sdk: QuartzCore.framework
+      - sdk: AppKit.framework
+      - sdk: AVFoundation.framework
+      - sdk: Speech.framework
+      - sdk: WebKit.framework

@@ -1,0 +1,301 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Agent backend" : {
+      "comment" : "Settings: which AI agent gateway to talk to",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Agent 後端" } }
+      }
+    },
+    "AI Agent | Xiaoguang" : {
+      "comment" : "Window title — character name",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "AI Agent | 小光" } }
+      }
+    },
+    "Angry" : {
+      "comment" : "Emotion name",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "生氣" } }
+      }
+    },
+    "Any OpenAI-compatible gateway (Ollama, LM Studio, vLLM, OpenRouter). The app POSTs to /v1/chat/completions on your endpoint." : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "任何相容於 OpenAI 的閘道（Ollama、LM Studio、vLLM、OpenRouter）。App 會向你端點的 /v1/chat/completions 發送請求。" } }
+      }
+    },
+    "API Key" : {
+      "comment" : "Settings: agent gateway API key field",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "API 金鑰" } }
+      }
+    },
+    "API key (if required)" : {
+      "comment" : "Settings: placeholder for the agent gateway API key field",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "API 金鑰（如有需要）" } }
+      }
+    },
+    "API Keys" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "API 金鑰" } }
+      }
+    },
+    "Audio engine error: %@" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "音訊引擎錯誤：%@" } }
+      }
+    },
+    "Bored" : {
+      "comment" : "Emotion name",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "無聊" } }
+      }
+    },
+    "Cancel" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "取消" } }
+      }
+    },
+    "Connected — Settings" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "已連線 — 設定" } }
+      }
+    },
+    "Connection" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "連線" } }
+      }
+    },
+    "Curious" : {
+      "comment" : "Emotion name",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "好奇" } }
+      }
+    },
+    "Disconnected — Settings" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "未連線 — 設定" } }
+      }
+    },
+    "Disgusted" : {
+      "comment" : "Emotion name",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "嫌棄" } }
+      }
+    },
+    "Enable TTS Voice" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "啟用語音輸出" } }
+      }
+    },
+    "Endpoint" : {
+      "comment" : "Settings: agent gateway endpoint URL field",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "端點" } }
+      }
+    },
+    "Excited" : {
+      "comment" : "Emotion name",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "興奮" } }
+      }
+    },
+    "Group ID" : {
+      "comment" : "Settings: placeholder for the MiniMax Group ID field",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Group ID" } }
+      }
+    },
+    "Happy" : {
+      "comment" : "Emotion name",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "開心" } }
+      }
+    },
+    "Initializing..." : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "初始化中…" } }
+      }
+    },
+    "Interface & character language" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "介面與角色語言" } }
+      }
+    },
+    "Interrupt & speak" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "打斷並說話" } }
+      }
+    },
+    "Language" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "語言" } }
+      }
+    },
+    "Laugh" : {
+      "comment" : "Emotion name",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "大笑" } }
+      }
+    },
+    "Loading character..." : {
+      "comment" : "Shown over the character view while the VRM model loads",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "載入角色中…" } }
+      }
+    },
+    "Local Hermes Agent gateway (run `hermes gateway`); key is its API_SERVER_KEY" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "本機 Hermes Agent 閘道（執行 `hermes gateway`）；金鑰即其 API_SERVER_KEY" } }
+      }
+    },
+    "Love" : {
+      "comment" : "Emotion name",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "喜歡" } }
+      }
+    },
+    "MiniMax API Key" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax API 金鑰" } }
+      }
+    },
+    "MiniMax Group ID" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax Group ID" } }
+      }
+    },
+    "Neutral" : {
+      "comment" : "Emotion name",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "普通" } }
+      }
+    },
+    "OK" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "確定" } }
+      }
+    },
+    "Pain" : {
+      "comment" : "Emotion name",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "心痛" } }
+      }
+    },
+    "Please enable Dictation first: System Settings → Keyboard → Dictation → On." : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "請先開啟聽寫功能：「系統設定」→「鍵盤」→「聽寫」→ 開啟。" } }
+      }
+    },
+    "Proud" : {
+      "comment" : "Emotion name",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "得意" } }
+      }
+    },
+    "Restart AniCompanion to apply the new interface language. (The character switches right away.)" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "請重新啟動 AniCompanion 以套用新的介面語言。（角色會立即切換。）" } }
+      }
+    },
+    "Restart required" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "需要重新啟動" } }
+      }
+    },
+    "Sad" : {
+      "comment" : "Emotion name",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "難過" } }
+      }
+    },
+    "Save" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "儲存" } }
+      }
+    },
+    "Send message" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "傳送訊息" } }
+      }
+    },
+    "Settings" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "設定" } }
+      }
+    },
+    "Shy" : {
+      "comment" : "Emotion name",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "害羞" } }
+      }
+    },
+    "Sleepy" : {
+      "comment" : "Emotion name",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "想睡" } }
+      }
+    },
+    "Smirk" : {
+      "comment" : "Emotion name",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "壞笑" } }
+      }
+    },
+    "Speech recognition failed: %@" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "語音辨識失敗：%@" } }
+      }
+    },
+    "Speech recognition isn't supported for the current language." : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "目前語言不支援語音辨識。" } }
+      }
+    },
+    "Speech recognition or microphone access isn't granted. Open System Settings → Privacy & Security to enable it." : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "語音辨識或麥克風權限未授權。請至「系統設定」→「隱私權與安全性」開啟。" } }
+      }
+    },
+    "Start voice input" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "開始語音輸入" } }
+      }
+    },
+    "Stop listening" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "停止聆聽" } }
+      }
+    },
+    "Surprised" : {
+      "comment" : "Emotion name",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "驚訝" } }
+      }
+    },
+    "TTS Voice ID" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "語音 ID" } }
+      }
+    },
+    "Type a message..." : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "輸入訊息…" } }
+      }
+    },
+    "Voice" : {
+      "comment" : "Settings section: TTS voice settings",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "語音" } }
+      }
+    },
+    "Voice ID" : {
+      "comment" : "Settings: placeholder for the TTS voice ID field",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "語音 ID" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}
