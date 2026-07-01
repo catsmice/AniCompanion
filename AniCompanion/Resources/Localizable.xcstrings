@@ -273,6 +273,12 @@
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "壞笑" } }
       }
     },
+    "Speech Input" : {
+      "comment" : "Settings section title: STT voice input",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "語音輸入" } }
+      }
+    },
     "Speech recognition failed: %@" : {
       "localizations" : {
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "語音辨識失敗：%@" } }
@@ -296,6 +302,12 @@
     "Stop listening" : {
       "localizations" : {
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "停止聆聽" } }
+      }
+    },
+    "STT Provider" : {
+      "comment" : "Settings: which STT provider to use for voice input",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "STT 供應商" } }
       }
     },
     "Surprised" : {

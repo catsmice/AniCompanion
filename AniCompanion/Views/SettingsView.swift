@@ -25,6 +25,16 @@ struct SettingsView: View {
     @State private var blueMagpieInferenceTimesteps: Int = 5
     @State private var ttsVoiceID: String = "Chinese (Mandarin)_Crisp_Girl"
     @State private var ttsEnabled: Bool = true
+    @State private var sttProvider: STTProvider = .apple
+    @State private var sttEndpointGroq: String = "https://api.groq.com/openai"
+    @State private var sttAPIKeyGroq: String = ""
+    @State private var sttModelGroq: String = "whisper-large-v3-turbo"
+    @State private var sttEndpointOpenAI: String = "https://api.openai.com"
+    @State private var sttAPIKeyOpenAI: String = ""
+    @State private var sttModelOpenAI: String = "whisper-1"
+    @State private var sttEndpointCompatible: String = "http://127.0.0.1:8000"
+    @State private var sttAPIKeyCompatible: String = ""
+    @State private var sttModelCompatible: String = "whisper-1"
     @State private var language: AppLanguage = .english
     @State private var vrmModelFilename: String = "AliciaSolid.vrm"
 
@@ -217,7 +227,55 @@ struct SettingsView: View {
                         }
                     }
 
-                    // MARK: Section 3: Language
+                    // MARK: Section 3: Speech Input
+
+                    SettingsSection(title: "Speech Input", icon: "mic.fill") {
+                        VStack(alignment: .leading, spacing: 14) {
+                            SettingsField(label: "STT Provider") {
+                                Picker("", selection: $sttProvider) {
+                                    ForEach(STTProvider.allCases) { provider in
+                                        Text(provider.displayName).tag(provider)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .labelsHidden()
+                            }
+
+                            switch sttProvider {
+                            case .apple:
+                                EmptyView()
+
+                            case .groq:
+                                SettingsField(label: "Endpoint") {
+                                    sttTextField("https://api.groq.com/openai", text: $sttEndpointGroq)
+                                }
+                                sttAPIKeyField($sttAPIKeyGroq)
+                                sttModelPicker($sttModelGroq, models: STTProvider.groq.availableModels)
+
+                            case .openAI:
+                                SettingsField(label: "Endpoint") {
+                                    sttTextField("https://api.openai.com", text: $sttEndpointOpenAI)
+                                }
+                                sttAPIKeyField($sttAPIKeyOpenAI)
+                                sttModelPicker($sttModelOpenAI, models: STTProvider.openAI.availableModels)
+
+                            case .openAICompatible:
+                                SettingsField(label: "Endpoint") {
+                                    sttTextField("http://127.0.0.1:8000", text: $sttEndpointCompatible)
+                                }
+                                sttAPIKeyField($sttAPIKeyCompatible)
+                                SettingsField(label: "Model") {
+                                    sttTextField("whisper-1", text: $sttModelCompatible)
+                                }
+                            }
+
+                            Text(sttProvider.configHint)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.white.opacity(0.4))
+                        }
+                    }
+
+                    // MARK: Section 4: Language
 
                     SettingsSection(title: "Language", icon: "globe") {
                         VStack(alignment: .leading, spacing: 8) {
@@ -315,6 +373,16 @@ struct SettingsView: View {
         blueMagpieInferenceTimesteps = appState.blueMagpieInferenceTimesteps
         ttsVoiceID = appState.ttsVoiceID
         ttsEnabled = appState.ttsEnabled
+        sttProvider = STTProvider(rawValue: appState.sttProvider) ?? .apple
+        sttEndpointGroq = appState.sttEndpointGroq
+        sttAPIKeyGroq = appState.sttAPIKeyGroq
+        sttModelGroq = appState.sttModelGroq
+        sttEndpointOpenAI = appState.sttEndpointOpenAI
+        sttAPIKeyOpenAI = appState.sttAPIKeyOpenAI
+        sttModelOpenAI = appState.sttModelOpenAI
+        sttEndpointCompatible = appState.sttEndpointCompatible
+        sttAPIKeyCompatible = appState.sttAPIKeyCompatible
+        sttModelCompatible = appState.sttModelCompatible
         language = AppLanguage.current
         vrmModelFilename = appState.vrmModelFilename
     }
@@ -336,6 +404,16 @@ struct SettingsView: View {
         appState.blueMagpieInferenceTimesteps = blueMagpieInferenceTimesteps
         appState.ttsVoiceID = ttsVoiceID
         appState.ttsEnabled = ttsEnabled
+        appState.sttProvider = sttProvider.rawValue
+        appState.sttEndpointGroq = sttEndpointGroq
+        appState.sttAPIKeyGroq = sttAPIKeyGroq
+        appState.sttModelGroq = sttModelGroq
+        appState.sttEndpointOpenAI = sttEndpointOpenAI
+        appState.sttAPIKeyOpenAI = sttAPIKeyOpenAI
+        appState.sttModelOpenAI = sttModelOpenAI
+        appState.sttEndpointCompatible = sttEndpointCompatible
+        appState.sttAPIKeyCompatible = sttAPIKeyCompatible
+        appState.sttModelCompatible = sttModelCompatible
         appState.vrmModelFilename = vrmModelFilename
 
         // Persist the language. The character/persona + STT pick it up immediately on
@@ -348,6 +426,52 @@ struct SettingsView: View {
 
         // Recreate services with updated settings.
         appState.reinitializeServices()
+    }
+
+    // MARK: - STT Field Helpers
+
+    private func sttAPIKeyField(_ binding: Binding<String>) -> some View {
+        SettingsField(label: "API Key") {
+            SecureField("API key", text: binding)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13, design: .monospaced))
+                .padding(8)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.white.opacity(0.06))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
+        }
+    }
+
+    private func sttTextField(_ placeholder: String, text: Binding<String>) -> some View {
+        TextField(placeholder, text: text)
+            .textFieldStyle(.plain)
+            .font(.system(size: 13, design: .monospaced))
+            .padding(8)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.white.opacity(0.06))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+            )
+    }
+
+    private func sttModelPicker(_ binding: Binding<String>, models: [String]) -> some View {
+        SettingsField(label: "Model") {
+            Picker("", selection: binding) {
+                ForEach(models, id: \.self) { model in
+                    Text(model).tag(model)
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+        }
     }
 }
 
