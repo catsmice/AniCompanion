@@ -73,3 +73,4 @@ targets:
       - sdk: AVFoundation.framework
       - sdk: Speech.framework
       - sdk: WebKit.framework
+      - sdk: ScreenCaptureKit.framework
