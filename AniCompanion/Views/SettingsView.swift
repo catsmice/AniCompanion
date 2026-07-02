@@ -11,6 +11,7 @@ struct SettingsView: View {
 
     @EnvironmentObject private var appState: AppState
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var previewAudioPlayer = AudioPlayerService()
 
     // Local copies for edit-then-save workflow.
     @State private var minimaxAPIKey: String = ""
@@ -23,6 +24,11 @@ struct SettingsView: View {
     @State private var ttsProvider: TTSProvider = .miniMax
     @State private var blueMagpieTTSEndpoint: String = "http://127.0.0.1:8765"
     @State private var blueMagpieInferenceTimesteps: Int = 5
+    @State private var openAITTSAPIKey: String = ""
+    @State private var openAITTSModel: String = OpenAITTSService.defaultModel
+    @State private var openAITTSVoice: String = OpenAITTSService.defaultVoice
+    @State private var openAITTSInstructions: String = OpenAITTSService.defaultInstructions
+    @State private var openAITTSSpeed: Double = 1.0
     @State private var ttsVoiceID: String = "Chinese (Mandarin)_Crisp_Girl"
     @State private var ttsEnabled: Bool = true
     @State private var language: AppLanguage = .english
@@ -30,6 +36,9 @@ struct SettingsView: View {
 
     /// Shows the "restart to apply UI language" alert after a language change.
     @State private var showRestartAlert = false
+    @State private var isTestingVoice = false
+    @State private var voicePreviewError: String?
+    @State private var voicePreviewTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -145,7 +154,8 @@ struct SettingsView: View {
                                 .labelsHidden()
                             }
 
-                            if ttsProvider == .miniMax {
+                            switch ttsProvider {
+                            case .miniMax:
                                 SettingsField(label: "MiniMax API Key") {
                                     SecureField("eyJ...", text: $minimaxAPIKey)
                                         .textFieldStyle(.plain)
@@ -190,7 +200,7 @@ struct SettingsView: View {
                                                 .stroke(Color.white.opacity(0.1), lineWidth: 1)
                                         )
                                 }
-                            } else {
+                            case .blueMagpie:
                                 SettingsField(label: "BlueMagpie Server") {
                                     TextField("http://127.0.0.1:8765", text: $blueMagpieTTSEndpoint)
                                         .textFieldStyle(.plain)
@@ -212,6 +222,116 @@ struct SettingsView: View {
                                             .font(.system(size: 13, design: .monospaced))
                                             .foregroundStyle(.white)
                                     }
+                                }
+                            case .openAI:
+                                SettingsField(label: "OpenAI API Key") {
+                                    SecureField("sk-...", text: $openAITTSAPIKey)
+                                        .textFieldStyle(.plain)
+                                        .font(.system(size: 13, design: .monospaced))
+                                        .padding(8)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .fill(Color.white.opacity(0.06))
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                        )
+                                }
+
+                                SettingsField(label: "OpenAI TTS Model") {
+                                    Picker("", selection: $openAITTSModel) {
+                                        ForEach(OpenAITTSService.modelOptions, id: \.self) { model in
+                                            Text(model).tag(model)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .labelsHidden()
+                                }
+
+                                SettingsField(label: "OpenAI Voice") {
+                                    Picker("", selection: $openAITTSVoice) {
+                                        ForEach(OpenAITTSService.voiceOptions(for: openAITTSModel), id: \.id) { voice in
+                                            Text(voice.menuLabel(language: language)).tag(voice.id)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .labelsHidden()
+                                    .onChange(of: openAITTSModel) { _, newModel in
+                                        let voices = OpenAITTSService.voiceOptions(for: newModel)
+                                        if !voices.contains(where: { $0.id == openAITTSVoice }) {
+                                            openAITTSVoice = voices.first?.id ?? OpenAITTSService.defaultVoice
+                                        }
+                                    }
+                                }
+
+                                let voiceDetail = OpenAITTSService.voiceDetail(
+                                    for: openAITTSVoice,
+                                    model: openAITTSModel,
+                                    language: language
+                                )
+                                if !voiceDetail.isEmpty {
+                                    Text(voiceDetail)
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.white.opacity(0.4))
+                                }
+
+                                SettingsField(label: "Voice Instructions") {
+                                    TextField(
+                                        "Speak naturally, warm and expressive.",
+                                        text: $openAITTSInstructions,
+                                        axis: .vertical
+                                    )
+                                    .lineLimit(2...4)
+                                    .textFieldStyle(.plain)
+                                    .padding(8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(Color.white.opacity(0.06))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                    )
+                                }
+
+                                SettingsField(label: "Speed") {
+                                    HStack(spacing: 12) {
+                                        Slider(value: $openAITTSSpeed, in: 0.25...4.0, step: 0.05)
+                                        Text("\(openAITTSSpeed, specifier: "%.2f")x")
+                                            .font(.system(size: 13, design: .monospaced))
+                                            .foregroundStyle(.white)
+                                            .frame(width: 48, alignment: .trailing)
+                                    }
+                                }
+                            }
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                Button {
+                                    previewVoice()
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        if isTestingVoice {
+                                            ProgressView()
+                                                .controlSize(.small)
+                                        } else {
+                                            Image(systemName: "play.circle.fill")
+                                        }
+                                        if isTestingVoice {
+                                            Text("Testing Voice...")
+                                        } else {
+                                            Text("Test Voice")
+                                        }
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(isTestingVoice)
+
+                                if let voicePreviewError {
+                                    Text(voicePreviewError)
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.red.opacity(0.85))
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
                         }
@@ -273,6 +393,9 @@ struct SettingsView: View {
         .onAppear {
             loadSettings()
         }
+        .onDisappear {
+            cancelVoicePreview()
+        }
         .alert("Restart required", isPresented: $showRestartAlert) {
             Button("OK") { dismiss() }
         } message: {
@@ -298,6 +421,79 @@ struct SettingsView: View {
         )
     }
 
+    // MARK: - Voice Preview
+
+    @MainActor
+    private func previewVoice() {
+        cancelVoicePreview()
+        isTestingVoice = true
+        voicePreviewError = nil
+
+        let service = makePreviewTTSService()
+        let text = previewText
+
+        voicePreviewTask = Task {
+            defer {
+                isTestingVoice = false
+                voicePreviewTask = nil
+            }
+
+            do {
+                var audioData = Data()
+                for try await chunk in service.synthesize(text: text, emotion: .happy) {
+                    try Task.checkCancellation()
+                    audioData.append(chunk)
+                }
+                guard !audioData.isEmpty else {
+                    throw TTSError.decodingError("TTS preview returned empty audio.")
+                }
+                try Task.checkCancellation()
+                try await previewAudioPlayer.playAudioData(audioData)
+            } catch is CancellationError {
+                previewAudioPlayer.stop()
+            } catch {
+                let format = String(localized: "Unable to preview voice: %@")
+                voicePreviewError = String(format: format, error.localizedDescription)
+            }
+        }
+    }
+
+    @MainActor
+    private func cancelVoicePreview() {
+        voicePreviewTask?.cancel()
+        voicePreviewTask = nil
+        previewAudioPlayer.stop()
+        isTestingVoice = false
+    }
+
+    private var previewText: String {
+        String(localized: "Hi, I'm Xiaoguang. This is a voice preview.")
+    }
+
+    private func makePreviewTTSService() -> any TTSServiceProtocol {
+        switch ttsProvider {
+        case .miniMax:
+            return TTSService(
+                apiKey: minimaxAPIKey,
+                groupId: minimaxGroupID,
+                voiceId: ttsVoiceID
+            )
+        case .blueMagpie:
+            return BlueMagpieTTSService(
+                endpoint: blueMagpieTTSEndpoint,
+                inferenceTimesteps: blueMagpieInferenceTimesteps
+            )
+        case .openAI:
+            return OpenAITTSService(
+                apiKey: openAITTSAPIKey,
+                model: openAITTSModel,
+                voice: openAITTSVoice,
+                instructions: openAITTSInstructions,
+                speed: openAITTSSpeed
+            )
+        }
+    }
+
     // MARK: - Data Flow
 
     /// Load current settings from AppState into local state.
@@ -313,6 +509,11 @@ struct SettingsView: View {
         ttsProvider = TTSProvider(rawValue: appState.ttsProvider) ?? .miniMax
         blueMagpieTTSEndpoint = appState.blueMagpieTTSEndpoint
         blueMagpieInferenceTimesteps = appState.blueMagpieInferenceTimesteps
+        openAITTSAPIKey = appState.openAITTSAPIKey
+        openAITTSModel = appState.openAITTSModel
+        openAITTSVoice = appState.openAITTSVoice
+        openAITTSInstructions = appState.openAITTSInstructions
+        openAITTSSpeed = appState.openAITTSSpeed
         ttsVoiceID = appState.ttsVoiceID
         ttsEnabled = appState.ttsEnabled
         language = AppLanguage.current
@@ -334,6 +535,11 @@ struct SettingsView: View {
         appState.ttsProvider = ttsProvider.rawValue
         appState.blueMagpieTTSEndpoint = blueMagpieTTSEndpoint
         appState.blueMagpieInferenceTimesteps = blueMagpieInferenceTimesteps
+        appState.openAITTSAPIKey = openAITTSAPIKey
+        appState.openAITTSModel = openAITTSModel
+        appState.openAITTSVoice = openAITTSVoice
+        appState.openAITTSInstructions = openAITTSInstructions
+        appState.openAITTSSpeed = openAITTSSpeed
         appState.ttsVoiceID = ttsVoiceID
         appState.ttsEnabled = ttsEnabled
         appState.vrmModelFilename = vrmModelFilename

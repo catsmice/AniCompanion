@@ -30,6 +30,21 @@ final class AppState: ObservableObject {
     /// BlueMagpie diffusion sampling steps. Lower is faster, higher is usually better quality.
     @AppStorage("bluemagpie_inference_timesteps") var blueMagpieInferenceTimesteps: Int = 5
 
+    /// OpenAI API key for the `/v1/audio/speech` TTS provider.
+    @AppStorage("openai_tts_api_key") var openAITTSAPIKey: String = ""
+
+    /// OpenAI speech model.
+    @AppStorage("openai_tts_model") var openAITTSModel: String = OpenAITTSService.defaultModel
+
+    /// OpenAI built-in voice name.
+    @AppStorage("openai_tts_voice") var openAITTSVoice: String = OpenAITTSService.defaultVoice
+
+    /// OpenAI voice instructions used by models that support promptable TTS.
+    @AppStorage("openai_tts_instructions") var openAITTSInstructions: String = OpenAITTSService.defaultInstructions
+
+    /// OpenAI speech speed multiplier.
+    @AppStorage("openai_tts_speed") var openAITTSSpeed: Double = 1.0
+
     /// Which agent backend to talk to. See `ChatBackend`. Each backend stores its own
     /// endpoint + key under per-backend keys (see `ChatBackend.savedEndpoint()` /
     /// `savedAPIKey()`), so switching backends swaps the connection rather than sharing it.
@@ -171,6 +186,14 @@ final class AppState: ObservableObject {
             return BlueMagpieTTSService(
                 endpoint: blueMagpieTTSEndpoint,
                 inferenceTimesteps: blueMagpieInferenceTimesteps
+            )
+        case .openAI:
+            return OpenAITTSService(
+                apiKey: openAITTSAPIKey,
+                model: openAITTSModel,
+                voice: openAITTSVoice,
+                instructions: openAITTSInstructions,
+                speed: openAITTSSpeed
             )
         }
     }

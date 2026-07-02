@@ -29,7 +29,7 @@ enum TTSError: LocalizedError {
         case .emptyText:
             return "Cannot synthesize empty text."
         case .unauthorized:
-            return "Invalid or missing MiniMax API key."
+            return "Invalid or missing TTS API key."
         }
     }
 }

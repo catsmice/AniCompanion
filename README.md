@@ -37,8 +37,9 @@ end-to-end and runnable locally so your conversations stay on your machine.
 - **Streaming chat** through a pluggable agent backend. Ships with **Hermes Agent** (the validated
   reference) and a generic **OpenAI-compatible** backend (Ollama, LM Studio, vLLM, OpenRouter, …);
   adding another is a one-`case` change — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
-- **Text-to-speech** via MiniMax Speech-02-Turbo, with **amplitude-driven lip sync** — plus an
-  *experimental* local **BlueMagpie-TTS** option (pending verification).
+- **Text-to-speech** via MiniMax Speech-02-Turbo or OpenAI Speech API, with
+  **amplitude-driven lip sync** — plus an *experimental* local **BlueMagpie-TTS** option
+  (pending verification).
 - **Speech-to-text** voice input using Apple's on-device Speech framework (auto-stops on silence).
 - **Emotions** — 16 emotion tags from the LLM drive the avatar's facial expressions.
 - **Proactive companion** — greets you on launch and speaks up after a period of inactivity
@@ -70,8 +71,8 @@ This release adds:
 - **[XcodeGen](https://github.com/yonaskolb/XcodeGen)** — `brew install xcodegen`
 - A running **agent gateway** — a **Hermes Agent** gateway is the validated path (see
   [Bring your own agent](#bring-your-own-agent))
-- *(Optional, for voice)* a **MiniMax** account for cloud TTS (API key + Group ID). Without TTS,
-  disable voice in Settings and 小光 replies with text + expressions only. *(An experimental local
+- *(Optional, for voice)* a **MiniMax** or **OpenAI** account for cloud TTS. Without TTS, disable
+  voice in Settings and 小光 replies with text + expressions only. *(An experimental local
   **BlueMagpie-TTS** option also exists — see [Local BlueMagpie TTS](#local-bluemagpie-tts).)*
 
 ## Quick start
@@ -95,6 +96,8 @@ On first launch, open **Settings (⚙️)** and fill in:
   [Bring your own agent](#bring-your-own-agent) below)
 - *(optional)* **Voice → TTS Provider**:
   - **MiniMax** — enter your API Key, Group ID, and Voice ID.
+  - **OpenAI** — enter your API key, choose a Speech model/voice, and optionally tune
+    instructions + speed.
   - **BlueMagpie** *(experimental, pending verification)* — point it at a local BlueMagpie-TTS
     server URL.
 
@@ -133,6 +136,20 @@ Setting up the Hermes reference backend, briefly:
 
 Full walkthrough, including optional MCP tools for richer proactive behavior, is in
 [`docs/hermes-setup.md`](docs/hermes-setup.md).
+
+## OpenAI TTS
+
+Select **Settings → Voice → TTS Provider → OpenAI** to route speech through OpenAI's
+`/v1/audio/speech` endpoint. AniCompanion requests WAV output so the existing playback and lip-sync
+pipeline can decode it directly.
+
+Available settings:
+
+- **API Key**
+- **TTS Model** — defaults to `gpt-4o-mini-tts`
+- **Voice** — built-in OpenAI voices such as `coral`, `marin`, or `cedar`
+- **Voice Instructions** — promptable style/tone guidance for models that support it
+- **Speed** — `0.25x` to `4.0x`
 
 ## Local BlueMagpie TTS
 
@@ -220,7 +237,7 @@ Architecture details and developer notes are in [`CLAUDE.md`](CLAUDE.md).
 | `xcodegen: command not found` | `brew install xcodegen` (see [Requirements](#requirements)). |
 | The window opens but the character never appears | First launch needs **internet** (the three-vrm runtime loads from a CDN). Also confirm `./scripts/download-model.sh` ran and a `.vrm` exists in `AniCompanion/Resources/VRMModel/`. |
 | You type a message and nothing happens | Your **agent gateway isn't running / reachable**. Start it (e.g. `hermes gateway`) and check the connection indicator in Settings. For Hermes, a 401 means the **API Key** in Settings doesn't match `API_SERVER_KEY`. |
-| 小光 replies in text but doesn't speak | TTS is off or unconfigured — that's fine. For voice, add your **MiniMax** key + Group ID under Settings → Voice, or leave TTS disabled. (BlueMagpie TTS is experimental — see [Local BlueMagpie TTS](#local-bluemagpie-tts).) |
+| 小光 replies in text but doesn't speak | TTS is off or unconfigured — that's fine. For voice, configure **MiniMax** or **OpenAI** under Settings → Voice, or leave TTS disabled. (BlueMagpie TTS is experimental — see [Local BlueMagpie TTS](#local-bluemagpie-tts).) |
 | Voice input does nothing | On first use macOS prompts for **Microphone** and **Speech Recognition** permission — allow both (System Settings → Privacy & Security). |
 
 More runtime diagnostics (health checks, connection states) are in [`docs/hermes-setup.md`](docs/hermes-setup.md).

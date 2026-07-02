@@ -137,6 +137,12 @@
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "開心" } }
       }
     },
+    "Hi, I'm Xiaoguang. This is a voice preview." : {
+      "comment" : "Settings: English sample sentence for TTS preview",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "你好，我是小光，這是語音試聽。" } }
+      }
+    },
     "Inference Timesteps" : {
       "localizations" : {
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "推論步數" } }
@@ -207,6 +213,21 @@
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "確定" } }
       }
     },
+    "OpenAI API Key" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "OpenAI API 金鑰" } }
+      }
+    },
+    "OpenAI TTS Model" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "OpenAI TTS 模型" } }
+      }
+    },
+    "OpenAI Voice" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "OpenAI 聲音" } }
+      }
+    },
     "Pain" : {
       "comment" : "Emotion name",
       "localizations" : {
@@ -273,6 +294,12 @@
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "壞笑" } }
       }
     },
+    "Speak naturally, warm and expressive." : {
+      "comment" : "Settings: placeholder/default voice instructions for OpenAI TTS",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "自然、溫暖、有表情地說話。" } }
+      }
+    },
     "Speech recognition failed: %@" : {
       "localizations" : {
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "語音辨識失敗：%@" } }
@@ -286,6 +313,12 @@
     "Speech recognition or microphone access isn't granted. Open System Settings → Privacy & Security to enable it." : {
       "localizations" : {
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "語音辨識或麥克風權限未授權。請至「系統設定」→「隱私權與安全性」開啟。" } }
+      }
+    },
+    "Speed" : {
+      "comment" : "Settings: OpenAI TTS speed slider",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "語速" } }
       }
     },
     "Start voice input" : {
@@ -314,15 +347,39 @@
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "語音 ID" } }
       }
     },
+    "Test Voice" : {
+      "comment" : "Settings: button that plays a TTS preview",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "試聽聲音" } }
+      }
+    },
+    "Testing Voice..." : {
+      "comment" : "Settings: TTS preview button while synthesizing/playing",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "正在試聽…" } }
+      }
+    },
     "Type a message..." : {
       "localizations" : {
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "輸入訊息…" } }
+      }
+    },
+    "Unable to preview voice: %@" : {
+      "comment" : "Settings: error label shown when TTS preview fails",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "無法試聽聲音：%@" } }
       }
     },
     "Voice" : {
       "comment" : "Settings section: TTS voice settings",
       "localizations" : {
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "語音" } }
+      }
+    },
+    "Voice Instructions" : {
+      "comment" : "Settings: OpenAI TTS prompt/instructions field",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "語音指示" } }
       }
     },
     "Voice ID" : {

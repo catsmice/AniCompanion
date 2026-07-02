@@ -15,8 +15,9 @@ macOS desktop AI character app with VRM 3D character rendering, LLM chat, TTS sp
 - **LLM**: Local **Hermes Agent** gateway — OpenAI-compatible HTTP API (`POST
   http://127.0.0.1:8642/v1/chat/completions`, `stream:true` SSE, Bearer auth). Bring your own.
 - **TTS**: Pluggable provider (`TTSProvider`) — **MiniMax** Speech-02-Turbo (streaming SSE,
-  hex-encoded MP3, cloud) or a local **BlueMagpie-TTS** HTTP server (`POST /v1/tts`, WAV). User
-  supplies the MiniMax API key, or runs the BlueMagpie server (see `Tools/blue_magpie_tts_server.py`)
+  hex-encoded MP3, cloud), **OpenAI** Speech API (`POST /v1/audio/speech`, WAV), or a local
+  **BlueMagpie-TTS** HTTP server (`POST /v1/tts`, WAV). User supplies the cloud provider key, or
+  runs the BlueMagpie server (see `Tools/blue_magpie_tts_server.py`)
 - **STT**: Apple Speech Framework (on-device)
 - **Audio**: AVAudioEngine + AVAudioPlayerNode
 - **Dependencies**: no SPM packages — three-vrm + three.js load via CDN import maps; networking via
@@ -29,7 +30,7 @@ AniCompanion/
 ├── AniCompanion/
 │   ├── App/             # App entry (AniCompanionApp), AppDelegate (owns the NSWindow + pet mode), AppState, AppLanguage, Log
 │   ├── Views/           # SwiftUI views (Main, Chat, Settings) + DesktopPet (PetDragView)
-│   ├── Services/        # ChatTransport + HTTPChatService (Hermes), TTS (TTSProvider: MiniMax + BlueMagpie), STT, AudioPlayer, ObjCSupport
+│   ├── Services/        # ChatTransport + HTTPChatService (Hermes), TTS (TTSProvider: MiniMax + OpenAI + BlueMagpie), STT, AudioPlayer, ObjCSupport
 │   ├── Character/       # ThreeVRMCharacterManager, ThreeVRMRenderView (WKWebView bridge to three-vrm)
 │   ├── Pipeline/        # Orchestration (ConversationController, SentenceParser, AudioQueue)
 │   ├── Models/          # Data models (ChatMessage, Emotion, ConversationHistory, AnimationClip)
@@ -85,12 +86,13 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
   60-min proactive idle timer. (A dormant `notify`/`runNotificationPipeline`/`ack` path remains for a
   future cron-push integration; nothing emits `notify` today.)
 - **TTSProvider** (enum registry): the voice analogue of `ChatBackend`. `miniMax` (cloud
-  Speech-02-Turbo, hex-encoded MP3 over SSE) + `blueMagpie` (local `POST /v1/tts`, WAV).
+  Speech-02-Turbo, hex-encoded MP3 over SSE) + `openAI` (cloud `POST /v1/audio/speech`,
+  WAV output) + `blueMagpie` (local `POST /v1/tts`, WAV).
   `AppState.makeTTSService()` builds the selected `any TTSServiceProtocol`; the Settings **TTS
   Provider** picker swaps providers and shows per-provider fields. `AudioPlayerService` sniffs the
-  RIFF/`WAVE` magic bytes to choose the temp-file extension, so BlueMagpie's WAV and MiniMax's MP3
-  both decode through one `AVAudioFile` path. Adding a provider = implement `TTSServiceProtocol` +
-  add a case (mirrors the agent-backend seam).
+  RIFF/`WAVE` magic bytes to choose the temp-file extension, so OpenAI/BlueMagpie WAV and MiniMax
+  MP3 both decode through one `AVAudioFile` path. Adding a provider = implement
+  `TTSServiceProtocol` + add a case (mirrors the agent-backend seam).
 
 ### VRM Character Rendering (three-vrm + WKWebView)
 
@@ -144,8 +146,9 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
 - **Character → VRM Model Filename** — file under `Resources/VRMModel/` to load (default
   `AliciaSolid.vrm`); changing it reloads the three-vrm scene live (via `loadModel` →
   `loadPendingModelIfPossible`, gated on `isWebViewReady`)
-- **Enable TTS Voice** + **TTS Provider** (`MiniMax` | `BlueMagpie`):
+- **Enable TTS Voice** + **TTS Provider** (`MiniMax` | `OpenAI` | `BlueMagpie`):
   - MiniMax: **API Key**, **Group ID**, **Voice ID**
+  - OpenAI: **API Key**, **TTS Model**, **Voice**, **Voice Instructions**, **Speed**
   - BlueMagpie: **Server** URL (default `http://127.0.0.1:8765`) + **Inference Timesteps**
 - **Language** (interface + character + STT)
 
@@ -182,9 +185,9 @@ it answers from the model.
 ## Status
 
 Implemented: VRM rendering + spring bones, streaming chat via Hermes, pluggable TTS (MiniMax +
-local BlueMagpie) with lip sync, STT voice input, live streaming chat UI, 16 emotions, skeletal
-animation clips, 60-min proactive idle timer, configurable VRM model (Settings), desktop pet mode
-(borderless/transparent draggable overlay with resize + speech bubble).
+OpenAI + local BlueMagpie) with lip sync, STT voice input, live streaming chat UI, 16 emotions,
+skeletal animation clips, 60-min proactive idle timer, configurable VRM model (Settings), desktop
+pet mode (borderless/transparent draggable overlay with resize + speech bubble).
 
 Not yet done / deferred:
 - Cron-scheduled proactive push (needs polling Hermes' jobs API or a delivery adapter)
