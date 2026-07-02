@@ -46,3 +46,6 @@ __pycache__/
 .idea/
 *.swp
 *~
+
+# Research / working notes (not for the repo)
+docs/notes/
