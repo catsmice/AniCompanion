@@ -18,7 +18,9 @@ macOS desktop AI character app with VRM 3D character rendering, LLM chat, TTS sp
   hex-encoded MP3, cloud), **OpenAI** Speech API (`POST /v1/audio/speech`, WAV), or a local
   **BlueMagpie-TTS** HTTP server (`POST /v1/tts`, WAV). User supplies the cloud provider key, or
   runs the BlueMagpie server (see `Tools/blue_magpie_tts_server.py`)
-- **STT**: Apple Speech Framework (on-device)
+- **STT**: Pluggable provider (`STTProvider`) — **Apple** Speech Framework (on-device, default) or
+  cloud **Whisper** (`POST /v1/audio/transcriptions`) via **Groq**, **OpenAI**, or any
+  **OpenAI-compatible** endpoint. User supplies the cloud key.
 - **Audio**: AVAudioEngine + AVAudioPlayerNode
 - **Dependencies**: no SPM packages — three-vrm + three.js load via CDN import maps; networking via
   URLSession, audio via AVFoundation. See `ATTRIBUTION.md`.
@@ -119,8 +121,17 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
 
 ### STT Voice Input
 
+- **STTProvider** (enum registry): the voice-input analogue of `ChatBackend`/`TTSProvider`. `apple`
+  (on-device, default) + `groq` / `openAI` / `openAICompatible` (Whisper `POST
+  /v1/audio/transcriptions`). `AppState.makeSTTService()` builds the selected `any
+  STTServiceProtocol`; the Settings **Speech Input** section swaps providers and shows per-provider
+  fields (endpoint/key/model). Apple stays the default. Adding a provider = implement
+  `STTServiceProtocol` + add a case (mirrors the agent-backend seam).
 - **STTService** (@MainActor): SFSpeechRecognizer, on-device recognition (default zh-Hant-TW)
 - **STTAudioCapture** (non-isolated): Separate helper for AVAudioEngine + installTap to avoid a Swift 6 @MainActor isolation crash on the audio thread
+- **WhisperSTTService** (@MainActor): records mic → WAV, then `POST /v1/audio/transcriptions`
+  (multipart) to a Whisper endpoint. Uses its own non-`@MainActor` `WhisperAudioCapture` for the tap
+  (same Swift-6 fix as `STTAudioCapture`); auto-stops on silence via an RMS-driven Timer.
 - Auto-stop on 2s silence via Timer
 
 ## Conventions
@@ -150,6 +161,9 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
   - MiniMax: **API Key**, **Group ID**, **Voice ID**
   - OpenAI: **API Key**, **TTS Model**, **Voice**, **Voice Instructions**, **Speed**
   - BlueMagpie: **Server** URL (default `http://127.0.0.1:8765`) + **Inference Timesteps**
+- **Speech Input → STT Provider** (`Apple` | `Groq` | `OpenAI` | `OpenAI-compatible`):
+  - Apple: on-device, no key
+  - Groq / OpenAI / OpenAI-compatible: **Endpoint**, **API Key**, **Model** (Whisper)
 - **Language** (interface + character + STT)
 
 Desktop Pet mode is not in this panel — toggle it from the 🐾 toolbar button, the **Character**
@@ -185,7 +199,8 @@ it answers from the model.
 ## Status
 
 Implemented: VRM rendering + spring bones, streaming chat via Hermes, pluggable TTS (MiniMax +
-OpenAI + local BlueMagpie) with lip sync, STT voice input, live streaming chat UI, 16 emotions,
+OpenAI + local BlueMagpie) with lip sync, pluggable STT voice input (Apple on-device + Groq/OpenAI
+Whisper), live streaming chat UI, 16 emotions,
 skeletal animation clips, 60-min proactive idle timer, configurable VRM model (Settings), desktop
 pet mode (borderless/transparent draggable overlay with resize + speech bubble).
 
