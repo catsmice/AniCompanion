@@ -78,6 +78,13 @@ final class AppState: ObservableObject {
     /// VRM model filename under Resources/VRMModel.
     @AppStorage("vrm_model_filename") var vrmModelFilename: String = "AliciaSolid.vrm"
 
+    /// Whether 小光 may capture the screen to "see" what you're working on. Off by default;
+    /// enabling it prompts for macOS Screen Recording permission (see `ScreenVisionService`).
+    @AppStorage("screen_vision_enabled") var screenVisionEnabled: Bool = false
+
+    /// What screen vision captures — the focused window (default) or the whole screen.
+    @AppStorage(ScreenVisionScope.storageKey) var screenVisionScope: String = ScreenVisionScope.focusedWindow.rawValue
+
     private var effectiveVRMModelFilename: String {
         let filename = vrmModelFilename.trimmingCharacters(in: .whitespacesAndNewlines)
         return filename.isEmpty ? "AliciaSolid.vrm" : filename
@@ -104,6 +111,11 @@ final class AppState: ObservableObject {
     /// Desktop pet mode: the window becomes a borderless, transparent, always-on-top,
     /// draggable character with no chat panel. Toggled from the Character menu (⌘⇧D).
     @Published var petMode: Bool = false
+
+    /// Captures what the user is working on so 小光 can "see" the screen. Long-lived so it tracks
+    /// the user's active app across the whole session (see `ScreenVisionService`); gated by
+    /// `screenVisionEnabled`. Not `@Published` — nothing observes it reactively.
+    let screenVisionService = ScreenVisionService()
 
     // MARK: - Private State
 
@@ -148,6 +160,9 @@ final class AppState: ObservableObject {
     func initializeServices() {
         guard !servicesInitialized else { return }
         servicesInitialized = true
+
+        // Keep the screen-vision capture scope in sync with the saved preference.
+        screenVisionService.scope = ScreenVisionScope(rawValue: screenVisionScope) ?? .focusedWindow
 
         let backend = ChatBackend.current
         let config = BackendConfig(

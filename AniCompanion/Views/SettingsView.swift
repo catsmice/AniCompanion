@@ -50,6 +50,15 @@ struct SettingsView: View {
     @State private var voicePreviewError: String?
     @State private var voicePreviewTask: Task<Void, Never>?
 
+    // Screen vision (default off; opt-in with consent).
+    @State private var screenVisionEnabled: Bool = false
+    @State private var screenVisionScope: ScreenVisionScope = .focusedWindow
+    @State private var showVisionConsent = false
+    @State private var screenRecordingGranted = false
+    @State private var visionPreview: NSImage?
+    @State private var visionError: String?
+    @State private var isCapturingScreen = false
+
     var body: some View {
         VStack(spacing: 0) {
             // MARK: - Header
@@ -412,6 +421,96 @@ struct SettingsView: View {
                                 .foregroundStyle(.white.opacity(0.4))
                         }
                     }
+
+                    // MARK: Section 5: Screen Vision
+
+                    SettingsSection(title: "Screen Vision", icon: "eye") {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Toggle("Let her see your screen", isOn: $screenVisionEnabled)
+                                .toggleStyle(.switch)
+                                .onChange(of: screenVisionEnabled) { _, isOn in
+                                    if isOn {
+                                        // Require explicit consent before enabling.
+                                        showVisionConsent = true
+                                    } else {
+                                        visionPreview = nil
+                                        visionError = nil
+                                    }
+                                }
+
+                            Text("Off by default. When on, 小光 glances at what you're working on when she speaks — screen images are sent to your configured AI model, which may be a cloud provider.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.white.opacity(0.4))
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            if screenVisionEnabled {
+                                SettingsField(label: "Capture") {
+                                    Picker("", selection: $screenVisionScope) {
+                                        ForEach(ScreenVisionScope.allCases) { scope in
+                                            Text(scope.displayName).tag(scope)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .labelsHidden()
+                                }
+
+                                Text(screenVisionScope.hint)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.white.opacity(0.4))
+                                    .fixedSize(horizontal: false, vertical: true)
+
+                                if !screenRecordingGranted {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundStyle(.yellow.opacity(0.85))
+                                        Text("Screen Recording permission needed (may require a relaunch after granting).")
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(.white.opacity(0.6))
+                                            .fixedSize(horizontal: false, vertical: true)
+                                        Button("Grant…") { requestScreenRecording() }
+                                            .buttonStyle(.link)
+                                            .font(.system(size: 11))
+                                    }
+                                }
+
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Button {
+                                        testScreenCapture()
+                                    } label: {
+                                        HStack(spacing: 6) {
+                                            if isCapturingScreen {
+                                                ProgressView().controlSize(.small)
+                                            } else {
+                                                Image(systemName: "camera.viewfinder")
+                                            }
+                                            Text(isCapturingScreen ? "Capturing…" : "Test: capture now")
+                                        }
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .disabled(isCapturingScreen)
+
+                                    if let visionPreview {
+                                        Image(nsImage: visionPreview)
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(maxWidth: .infinity, maxHeight: 160, alignment: .leading)
+                                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 6)
+                                                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                            )
+                                    }
+
+                                    if let visionError {
+                                        Text(visionError)
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(.red.opacity(0.85))
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 20)
@@ -458,6 +557,12 @@ struct SettingsView: View {
             Button("OK") { dismiss() }
         } message: {
             Text("Restart AniCompanion to apply the new interface language. (The character switches right away.)")
+        }
+        .alert("Let her see your screen?", isPresented: $showVisionConsent) {
+            Button("Enable") { enableScreenVision() }
+            Button("Cancel", role: .cancel) { screenVisionEnabled = false }
+        } message: {
+            Text("When enabled, AniCompanion captures your focused window (or the whole screen) and sends the image to your configured AI model so 小光 can understand what you're working on. If your model runs in the cloud, the screenshot leaves your Mac. macOS will also ask for Screen Recording permission. You can turn this off anytime.")
         }
     }
 
@@ -552,6 +657,49 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Screen Vision
+
+    /// Called after the user confirms the consent alert: request macOS Screen Recording permission.
+    @MainActor
+    private func enableScreenVision() {
+        requestScreenRecording()
+    }
+
+    @MainActor
+    private func requestScreenRecording() {
+        appState.screenVisionService.requestAccess()
+        screenRecordingGranted = appState.screenVisionService.hasAccess
+    }
+
+    /// Debug affordance: capture one frame with the current scope and show it, so the user can
+    /// see exactly what 小光 would send before any of it reaches the model.
+    @MainActor
+    private func testScreenCapture() {
+        isCapturingScreen = true
+        visionError = nil
+        visionPreview = nil
+
+        let service = appState.screenVisionService
+        service.scope = screenVisionScope
+        if !service.hasAccess { service.requestAccess() }
+
+        Task {
+            defer { isCapturingScreen = false }
+            do {
+                let data = try await service.captureCurrentWork()
+                screenRecordingGranted = service.hasAccess
+                if let image = NSImage(data: data) {
+                    visionPreview = image
+                } else {
+                    visionError = String(localized: "Could not decode the captured image.")
+                }
+            } catch {
+                screenRecordingGranted = service.hasAccess
+                visionError = error.localizedDescription
+            }
+        }
+    }
+
     // MARK: - Data Flow
 
     /// Load current settings from AppState into local state.
@@ -586,6 +734,9 @@ struct SettingsView: View {
         sttModelCompatible = appState.sttModelCompatible
         language = AppLanguage.current
         vrmModelFilename = appState.vrmModelFilename
+        screenVisionEnabled = appState.screenVisionEnabled
+        screenVisionScope = ScreenVisionScope(rawValue: appState.screenVisionScope) ?? .focusedWindow
+        screenRecordingGranted = appState.screenVisionService.hasAccess
     }
 
     /// Write local state back to AppState for persistence, then reinitialize services.
@@ -621,6 +772,8 @@ struct SettingsView: View {
         appState.sttAPIKeyCompatible = sttAPIKeyCompatible
         appState.sttModelCompatible = sttModelCompatible
         appState.vrmModelFilename = vrmModelFilename
+        appState.screenVisionEnabled = screenVisionEnabled
+        appState.screenVisionScope = screenVisionScope.rawValue
 
         // Persist the language. The character/persona + STT pick it up immediately on
         // reinitialize; the SwiftUI interface needs `AppleLanguages` + a relaunch.
