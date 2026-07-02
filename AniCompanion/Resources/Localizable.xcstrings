@@ -24,6 +24,12 @@
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "任何相容於 OpenAI 的閘道（Ollama、LM Studio、vLLM、OpenRouter）。App 會向你端點的 /v1/chat/completions 發送請求。" } }
       }
     },
+    "Any Whisper-compatible endpoint (self-hosted, etc.). POST /v1/audio/transcriptions." : {
+      "comment" : "Settings: STT provider hint (OpenAI-compatible Whisper endpoint)",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "任何相容 Whisper 的端點（自架等）。POST /v1/audio/transcriptions。" } }
+      }
+    },
     "API Key" : {
       "comment" : "Settings: agent gateway API key field",
       "localizations" : {
@@ -125,6 +131,12 @@
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "檔案必須位於 Resources/VRMModel。" } }
       }
     },
+    "Groq Whisper API — fast cloud transcription." : {
+      "comment" : "Settings: STT provider hint (Groq)",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Groq Whisper API — 快速的雲端轉錄。" } }
+      }
+    },
     "Group ID" : {
       "comment" : "Settings: placeholder for the MiniMax Group ID field",
       "localizations" : {
@@ -213,6 +225,12 @@
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "確定" } }
       }
     },
+    "On-device speech recognition via Apple Speech Framework. No API key needed." : {
+      "comment" : "Settings: STT provider hint (Apple, on-device)",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "透過 Apple 語音框架進行裝置端語音辨識，無需 API 金鑰。" } }
+      }
+    },
     "OpenAI API Key" : {
       "localizations" : {
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "OpenAI API 金鑰" } }
@@ -226,6 +244,12 @@
     "OpenAI Voice" : {
       "localizations" : {
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "OpenAI 聲音" } }
+      }
+    },
+    "OpenAI Whisper / GPT-4o transcription API." : {
+      "comment" : "Settings: STT provider hint (OpenAI)",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "OpenAI Whisper / GPT-4o 轉錄 API。" } }
       }
     },
     "Pain" : {

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 enum STTProvider: String, CaseIterable, Identifiable, Sendable {
     case apple
@@ -19,7 +20,7 @@ enum STTProvider: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    var configHint: String {
+    var configHint: LocalizedStringKey {
         switch self {
         case .apple:
             return "On-device speech recognition via Apple Speech Framework. No API key needed."

@@ -27,7 +27,7 @@ final class WhisperSTTService: STTServiceProtocol {
 
     private let initialSpeechTimeout: TimeInterval = 5.0
     private let silenceTimeout: TimeInterval = 2.0
-    // ponytail: RMS threshold for silence detection — tune if too sensitive/insensitive
+    // RMS threshold for silence detection — tune if too sensitive/insensitive
     private let silenceRMSThreshold: Float = 0.01
 
     init(endpoint: String, apiKey: String, model: String) {
@@ -203,7 +203,7 @@ private final class WhisperAudioCapture: @unchecked Sendable {
     private var outputFile: AVAudioFile?
     private var outputURL: URL?
     var onStop: (() -> Void)?
-    // ponytail: simple RMS callback for silence detection
+    // simple RMS callback for silence detection
     var onRMS: ((Float) -> Void)?
 
     func startRecording() throws -> URL {
