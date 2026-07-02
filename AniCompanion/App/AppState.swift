@@ -59,6 +59,22 @@ final class AppState: ObservableObject {
     /// The app/character language (UI, persona, and speech recognition). See `AppLanguage`.
     @AppStorage("app_language") var appLanguage: String = AppLanguage.systemDefault.rawValue
 
+    /// Which STT provider to use for voice input.
+    @AppStorage(STTProvider.storageKey) var sttProvider: String = STTProvider.apple.rawValue
+
+    /// Per-provider STT settings.
+    @AppStorage("stt_endpoint_groq") var sttEndpointGroq: String = "https://api.groq.com/openai"
+    @AppStorage("stt_api_key_groq") var sttAPIKeyGroq: String = ""
+    @AppStorage("stt_model_groq") var sttModelGroq: String = "whisper-large-v3-turbo"
+
+    @AppStorage("stt_endpoint_openAI") var sttEndpointOpenAI: String = "https://api.openai.com"
+    @AppStorage("stt_api_key_openAI") var sttAPIKeyOpenAI: String = ""
+    @AppStorage("stt_model_openAI") var sttModelOpenAI: String = "whisper-1"
+
+    @AppStorage("stt_endpoint_compatible") var sttEndpointCompatible: String = "http://127.0.0.1:8000"
+    @AppStorage("stt_api_key_compatible") var sttAPIKeyCompatible: String = ""
+    @AppStorage("stt_model_compatible") var sttModelCompatible: String = "whisper-1"
+
     /// VRM model filename under Resources/VRMModel.
     @AppStorage("vrm_model_filename") var vrmModelFilename: String = "AliciaSolid.vrm"
 
@@ -150,7 +166,7 @@ final class AppState: ObservableObject {
 
         let ttsService: any TTSServiceProtocol = makeTTSService()
 
-        let sttService = STTService()
+        let sttService: any STTServiceProtocol = makeSTTService()
         let audioPlayer = AudioPlayerService()
 
         let controller = ConversationController(
@@ -172,6 +188,32 @@ final class AppState: ObservableObject {
 
         // Trigger launch greeting after model loads.
         controller.triggerLaunchGreeting()
+    }
+
+    private func makeSTTService() -> any STTServiceProtocol {
+        let provider = STTProvider(rawValue: sttProvider) ?? .apple
+        switch provider {
+        case .apple:
+            return STTService()
+        case .groq:
+            return WhisperSTTService(
+                endpoint: sttEndpointGroq,
+                apiKey: sttAPIKeyGroq,
+                model: sttModelGroq
+            )
+        case .openAI:
+            return WhisperSTTService(
+                endpoint: sttEndpointOpenAI,
+                apiKey: sttAPIKeyOpenAI,
+                model: sttModelOpenAI
+            )
+        case .openAICompatible:
+            return WhisperSTTService(
+                endpoint: sttEndpointCompatible,
+                apiKey: sttAPIKeyCompatible,
+                model: sttModelCompatible
+            )
+        }
     }
 
     private func makeTTSService() -> any TTSServiceProtocol {
