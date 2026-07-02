@@ -24,6 +24,11 @@ pluggable (see [Bring your own agent](#bring-your-own-agent)).
 **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** is the reference backend, validated
 end-to-end and runnable locally so your conversations stay on your machine.
 
+> **A note on cloud voice services:** speech stays on your Mac with the defaults — **Apple** STT is
+> on-device and the local **BlueMagpie** TTS runs on your machine. If you opt into a *cloud* provider
+> (MiniMax/OpenAI TTS, or Groq/OpenAI Whisper STT), the corresponding text or **microphone audio is
+> sent to that provider** for processing. Pick Apple STT to keep voice input fully local.
+
 | English | 繁體中文 |
 |:---:|:---:|
 | <img src="assets/en_screenshot.png" height="290" alt="AniCompanion running with an English interface — the 小光 VRM avatar beside a chat panel"> | <img src="assets/tw_screenshot.png" height="290" alt="AniCompanion 的繁體中文介面 — 小光 VRM 虛擬角色與聊天面板"> |
