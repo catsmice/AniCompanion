@@ -586,7 +586,6 @@ final class ConversationController: ObservableObject {
         // Capture failures (nothing to look at, missing permission) are non-fatal — she just
         // doesn't see anything this turn.
         var visionImages: [Data] = []
-        Log.pipeline("[Vision] gate: enabled=\(screenVisionEnabled), hasService=\(screenVisionService != nil), hasAccess=\(screenVisionService?.hasAccess ?? false)")
         if screenVisionEnabled, let vision = screenVisionService, vision.hasAccess {
             do {
                 visionImages = [try await vision.captureCurrentWork()]
@@ -594,7 +593,6 @@ final class ConversationController: ObservableObject {
                 Log.pipeline("[Vision] Capture skipped: \(error.localizedDescription)")
             }
         }
-        Log.pipeline("[Vision] attaching \(visionImages.count) image(s) to turn")
 
         // Send chat request via the transport.
         try await chatTransport.send(.chat(id: chatId, messages: apiMessages, images: visionImages))
