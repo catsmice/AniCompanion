@@ -5,10 +5,14 @@ import Combine
 
 // MARK: - PetPanelWindow
 //
-// A window that can still become key/main once it's borderless (a stock borderless NSWindow
-// returns false for both, which silently kills keyboard focus and makes it look "dead").
+// An NSPanel so pet mode can use `.nonactivatingPanel` — she floats above your other apps and
+// receives drags/clicks WITHOUT making AniCompanion the frontmost app, so your editor keeps focus
+// while she watches (only an NSPanel honors that style; a plain NSWindow ignores it).
+//
+// The `canBecomeKey`/`canBecomeMain` overrides keep her usable when borderless (a stock borderless
+// window returns false for both, which silently kills focus and makes her look "dead").
 
-final class PetPanelWindow: NSWindow {
+final class PetPanelWindow: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 }
@@ -58,6 +62,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.setContentSize(Self.windowedSize)
         window.isReleasedWhenClosed = false
+        // NSPanels hide when the app deactivates by default; we never want that — in pet mode she
+        // floats above your *other* apps, and in windowed mode she should act like a normal window.
+        window.hidesOnDeactivate = false
         window.title = String(localized: "AI Agent | Xiaoguang", comment: "Window title — character name")
         window.center()
         window.makeKeyAndOrderFront(nil)
@@ -97,7 +104,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         appState.characterManager.petModeActive = true   // enable the speech bubble
 
-        window.styleMask = [.borderless]                 // full assignment drops .titled
+        // `.nonactivatingPanel` lets her receive drags/clicks without making AniCompanion frontmost,
+        // so your work app keeps focus. `.borderless` is 0, so this is effectively just the
+        // non-activating flag. (Full assignment drops the windowed `.titled` mask.)
+        window.styleMask = [.borderless, .nonactivatingPanel]
         window.hasShadow = false                         // also avoids a 1px stroke on Tahoe
         window.level = .floating                         // always on top
         window.isMovableByWindowBackground = true
@@ -221,7 +231,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.setFrame(f, display: true)
     }
 
+    // The main character window is an NSPanel (for non-activating pet mode), and AppKit does NOT
+    // count panels toward the "last window closed" check — so returning true here quit the whole
+    // app whenever an auxiliary window (Settings) closed. Return false and quit explicitly only
+    // when the *main* window closes (see windowWillClose), preserving "close the window = quit".
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        false
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        // Closing the main character window quits the app (matching normal window behavior);
+        // closing auxiliary windows like Settings does not. Pet mode never closes the window.
+        if (notification.object as? NSWindow) === mainWindow, !isPetActive {
+            NSApp.terminate(nil)
+        }
     }
 }
