@@ -13,6 +13,34 @@ open AniCompanion.xcodeproj       # build & run in Xcode
 
 See `CLAUDE.md` for architecture notes and `README.md` for first-run setup.
 
+## Testing screen vision (macOS Screen Recording)
+
+Screen vision (**Settings → Screen Vision → "Let her see your screen"**, off by default) needs macOS
+**Screen Recording** permission — macOS prompts on first capture, or you can grant it under **System
+Settings → Privacy & Security → Screen Recording**.
+
+⚠️ **Dev caveat:** local builds are ad-hoc signed ("Sign to Run Locally"), and macOS ties Screen
+Recording to the exact code signature — which changes on every rebuild. So macOS **revokes the grant
+after each rebuild**, and you'll re-grant while iterating. (Microphone and Speech Recognition don't do
+this; Screen Recording is a higher-security permission bound to the *signature* rather than the bundle
+ID.) Properly-signed release builds are unaffected — this is a dev-only annoyance.
+
+**Optional — make the grant survive rebuilds** by signing your dev build with a stable self-signed
+code-signing certificate:
+
+1. **Keychain Access → Certificate Assistant → Create a Certificate…** → name it (e.g.
+   `AniCompanion Dev`), **Identity Type: Self Signed Root**, **Certificate Type: Code Signing**.
+2. Build, then re-sign the built `.app` before launching (the fixed certificate gives a fixed
+   *designated requirement*, which is what Screen Recording keeps across rebuilds):
+   ```bash
+   codesign --force --deep --sign "AniCompanion Dev" \
+     --entitlements AniCompanion/AniCompanion.entitlements --timestamp=none \
+     /path/to/AniCompanion.app   # Xcode → Product → Show Build Folder in Finder
+   ```
+3. Grant Screen Recording **once** — it now persists across rebuilds.
+
+This is entirely local; it doesn't touch the project or affect releases.
+
 ## Localization 🌍
 
 The app is **English-first**; Traditional Chinese (`zh-Hant`) ships as a second language. A language

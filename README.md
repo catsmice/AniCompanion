@@ -47,6 +47,9 @@ end-to-end and runnable locally so your conversations stay on your machine.
   (pending verification).
 - **Speech-to-text** voice input — **Apple**'s on-device Speech framework (default) or cloud
   **Whisper** (Groq, OpenAI, or any OpenAI-compatible endpoint), auto-stops on silence.
+- **Screen vision** *(opt-in, off by default)* — let 小光 see what you're working on: she captures
+  your focused window (or the whole screen) and sends it to your model so she can react to it. Needs a
+  **vision-capable model** and macOS **Screen Recording** permission.
 - **Emotions** — 16 emotion tags from the LLM drive the avatar's facial expressions.
 - **Proactive companion** — greets you on launch and speaks up after a period of inactivity
   (tool-agnostic: uses your Hermes tools if configured, otherwise just chats).
