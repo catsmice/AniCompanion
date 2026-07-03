@@ -426,17 +426,23 @@ struct SettingsView: View {
 
                     SettingsSection(title: "Screen Vision", icon: "eye") {
                         VStack(alignment: .leading, spacing: 14) {
-                            Toggle("Let her see your screen", isOn: $screenVisionEnabled)
-                                .toggleStyle(.switch)
-                                .onChange(of: screenVisionEnabled) { _, isOn in
+                            // Custom binding: `set` runs only on user interaction, so the consent
+                            // alert appears only when the user flips this off→on — not when
+                            // `loadSettings()` restores an already-enabled value on Settings open.
+                            Toggle("Let her see your screen", isOn: Binding(
+                                get: { screenVisionEnabled },
+                                set: { isOn in
                                     if isOn {
-                                        // Require explicit consent before enabling.
+                                        screenVisionEnabled = true
                                         showVisionConsent = true
                                     } else {
+                                        screenVisionEnabled = false
                                         visionPreview = nil
                                         visionError = nil
                                     }
                                 }
+                            ))
+                            .toggleStyle(.switch)
 
                             Text("Off by default. When on, 小光 glances at what you're working on when she speaks — screen images are sent to your configured AI model, which may be a cloud provider.")
                                 .font(.system(size: 11))
