@@ -1,6 +1,120 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Screen Vision" : {
+      "comment" : "Settings section: screen vision",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "螢幕視覺" } }
+      }
+    },
+    "Let her see your screen" : {
+      "comment" : "Settings: screen vision toggle",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "讓她看見你的螢幕" } }
+      }
+    },
+    "Let her see your screen?" : {
+      "comment" : "Settings: screen vision consent alert title",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "要讓她看見你的螢幕嗎？" } }
+      }
+    },
+    "Off by default. When on, 小光 glances at what you're working on when she speaks — screen images are sent to your configured AI model, which may be a cloud provider." : {
+      "comment" : "Settings: screen vision description",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "預設為關閉。開啟後，小光會在說話時看一眼你正在做的事——螢幕影像會傳送到你設定的 AI 模型，該模型可能位於雲端。" } }
+      }
+    },
+    "When enabled, AniCompanion captures your focused window (or the whole screen) and sends the image to your configured AI model so 小光 can understand what you're working on. If your model runs in the cloud, the screenshot leaves your Mac. macOS will also ask for Screen Recording permission. You can turn this off anytime." : {
+      "comment" : "Settings: screen vision consent alert body",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "開啟後，AniCompanion 會擷取你的焦點視窗（或整個螢幕），並將影像傳送到你設定的 AI 模型，讓小光能理解你正在做的事。如果你的模型在雲端執行，螢幕截圖就會離開你的 Mac。macOS 也會要求「螢幕錄製」權限。你可以隨時關閉此功能。" } }
+      }
+    },
+    "Capture" : {
+      "comment" : "Settings: screen vision capture-scope picker label",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "擷取範圍" } }
+      }
+    },
+    "Screen Recording permission needed (may require a relaunch after granting)." : {
+      "comment" : "Settings: screen vision permission-needed row",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "需要「螢幕錄製」權限（授權後可能需要重新啟動 App）。" } }
+      }
+    },
+    "Grant…" : {
+      "comment" : "Settings: button to request Screen Recording permission",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "授權…" } }
+      }
+    },
+    "Capturing…" : {
+      "comment" : "Settings: screen-capture test button, in progress",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "擷取中…" } }
+      }
+    },
+    "Test: capture now" : {
+      "comment" : "Settings: screen-capture test/preview button",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "測試：立即擷取" } }
+      }
+    },
+    "Enable" : {
+      "comment" : "Settings: consent alert confirm button",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "啟用" } }
+      }
+    },
+    "Could not decode the captured image." : {
+      "comment" : "Settings: screen capture preview decode error",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "無法解碼擷取的影像。" } }
+      }
+    },
+    "Focused window" : {
+      "comment" : "Settings: screen vision scope name",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "焦點視窗" } }
+      }
+    },
+    "Entire screen" : {
+      "comment" : "Settings: screen vision scope name",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "整個螢幕" } }
+      }
+    },
+    "Only the window of the app you're working in — never AniCompanion, and not your other windows." : {
+      "comment" : "Settings: focused-window scope hint",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "只擷取你正在使用的 App 視窗——絕不會擷取 AniCompanion，也不會擷取你的其他視窗。" } }
+      }
+    },
+    "The whole screen (AniCompanion's own overlay is excluded)." : {
+      "comment" : "Settings: entire-screen scope hint",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "整個螢幕（不包含 AniCompanion 自己的疊加視窗）。" } }
+      }
+    },
+    "Screen Recording permission isn't granted. Enable it in System Settings → Privacy & Security → Screen Recording." : {
+      "comment" : "ScreenVisionError: not authorized",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "尚未授予「螢幕錄製」權限。請至「系統設定」→「隱私權與安全性」→「螢幕錄製」開啟。" } }
+      }
+    },
+    "Nothing to look at yet — open the app you're working in first." : {
+      "comment" : "ScreenVisionError: no capture target",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "目前沒有可看的內容——請先開啟你正在使用的 App。" } }
+      }
+    },
+    "Screen capture failed: %@" : {
+      "comment" : "ScreenVisionError: capture failed with detail",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "螢幕擷取失敗：%@" } }
+      }
+    },
     "Agent backend" : {
       "comment" : "Settings: which AI agent gateway to talk to",
       "localizations" : {

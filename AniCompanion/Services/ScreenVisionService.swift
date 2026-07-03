@@ -47,11 +47,11 @@ enum ScreenVisionError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notAuthorized:
-            return "Screen Recording permission isn't granted. Enable it in System Settings → Privacy & Security → Screen Recording."
+            return String(localized: "Screen Recording permission isn't granted. Enable it in System Settings → Privacy & Security → Screen Recording.")
         case .noCaptureTarget:
-            return "Nothing to look at yet — open the app you're working in first."
+            return String(localized: "Nothing to look at yet — open the app you're working in first.")
         case .captureFailed(let detail):
-            return "Screen capture failed: \(detail)"
+            return String(localized: "Screen capture failed: \(detail)")
         }
     }
 }
