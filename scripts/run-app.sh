@@ -78,5 +78,12 @@ if [[ "$DO_QUIT" == "1" ]]; then
   sleep 1
 fi
 
+# Re-register THIS build with LaunchServices before launching. If another copy of the app with the
+# same bundle id is registered (a second checkout, an installed build, or a stale DerivedData path),
+# `open` can resolve the bundle id to that other copy and launch the wrong one — or nothing that
+# stays running. Force-registering our exact path makes `open` launch the build we just built.
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+[ -x "$LSREGISTER" ] && "$LSREGISTER" -f "$APP" >/dev/null 2>&1 || true
+
 echo "→ Launching…"
 open "$APP"
