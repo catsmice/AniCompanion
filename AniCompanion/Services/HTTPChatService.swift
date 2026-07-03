@@ -107,8 +107,8 @@ final class HTTPChatService: ObservableObject, ChatTransport {
 
     func send(_ message: WSOutgoing) async throws {
         switch message {
-        case .chat(let id, let messages):
-            startChat(ref: id, messages: messages)
+        case .chat(let id, let messages, let images):
+            startChat(ref: id, messages: messages, images: images)
         case .cancel(let ref):
             activeTasks[ref]?.cancel()
             activeTasks[ref] = nil
@@ -146,17 +146,17 @@ final class HTTPChatService: ObservableObject, ChatTransport {
 
     // MARK: - Streaming Chat
 
-    private func startChat(ref: String, messages: [[String: String]]) {
+    private func startChat(ref: String, messages: [[String: String]], images: [Data]) {
         // Replace any prior request reusing this ref.
         activeTasks[ref]?.cancel()
         let task = Task { [weak self] in
-            await self?.streamChat(ref: ref, messages: messages)
+            await self?.streamChat(ref: ref, messages: messages, images: images)
             self?.activeTasks[ref] = nil
         }
         activeTasks[ref] = task
     }
 
-    private func streamChat(ref: String, messages: [[String: String]]) async {
+    private func streamChat(ref: String, messages: [[String: String]], images: [Data]) async {
         guard let url = URL(string: baseURL + "/v1/chat/completions") else {
             eventsContinuation.yield(.error(ref: ref, message: "Invalid \(serviceName) endpoint URL: \(baseURL)"))
             return
@@ -170,7 +170,7 @@ final class HTTPChatService: ObservableObject, ChatTransport {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
 
-        let body: [String: Any] = ["model": model, "messages": messages, "stream": true]
+        let body: [String: Any] = ["model": model, "messages": Self.encodeMessages(messages, images: images), "stream": true]
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         } catch {
@@ -247,6 +247,32 @@ final class HTTPChatService: ObservableObject, ChatTransport {
             return nil
         }
         return content
+    }
+
+    /// Produce the JSON-ready `messages` array. Without images this is the plain text path
+    /// (each message keeps its `String` content). With images, the **final user message**'s content
+    /// becomes an OpenAI content-parts array — the original text plus one `image_url` part per frame
+    /// (`data:image/jpeg;base64,…`) — which vision-capable models understand and text-only models
+    /// reject with a clear error.
+    private static func encodeMessages(_ messages: [[String: String]], images: [Data]) -> [[String: Any]] {
+        var result: [[String: Any]] = messages.map { $0 as [String: Any] }
+        guard !images.isEmpty,
+              let idx = result.lastIndex(where: { ($0["role"] as? String) == "user" }) else {
+            return result
+        }
+
+        var parts: [[String: Any]] = []
+        if let text = result[idx]["content"] as? String, !text.isEmpty {
+            parts.append(["type": "text", "text": text])
+        }
+        for data in images {
+            parts.append([
+                "type": "image_url",
+                "image_url": ["url": "data:image/jpeg;base64,\(data.base64EncodedString())"]
+            ])
+        }
+        result[idx]["content"] = parts
+        return result
     }
 
     /// Trims a trailing slash so we can append `/v1/chat/completions` cleanly.

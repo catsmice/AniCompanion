@@ -62,11 +62,16 @@ final class ConversationController: ObservableObject {
     /// Whether TTS voice output is enabled. When false, text and expressions still work but no audio plays.
     var ttsEnabled: Bool = true
 
+    /// Whether 小光 attaches a screenshot of the user's current work to each turn (screen vision).
+    /// Requires a `screenVisionService` and macOS Screen Recording permission.
+    var screenVisionEnabled: Bool = false
+
     // MARK: - Dependencies
 
     private let chatTransport: any ChatTransport
     private let ttsService: TTSServiceProtocol
     private let sttService: STTServiceProtocol?
+    private let screenVisionService: ScreenVisionService?
     private let audioPlayer: AudioPlayerService
     private let history: ConversationHistory
     private weak var characterController: (any CharacterControllerProtocol)?
@@ -134,6 +139,7 @@ final class ConversationController: ObservableObject {
         chatTransport: any ChatTransport,
         ttsService: TTSServiceProtocol,
         sttService: STTServiceProtocol? = nil,
+        screenVisionService: ScreenVisionService? = nil,
         audioPlayer: AudioPlayerService,
         history: ConversationHistory,
         characterController: (any CharacterControllerProtocol)? = nil
@@ -141,6 +147,7 @@ final class ConversationController: ObservableObject {
         self.chatTransport = chatTransport
         self.ttsService = ttsService
         self.sttService = sttService
+        self.screenVisionService = screenVisionService
         self.audioPlayer = audioPlayer
         self.history = history
         self.characterController = characterController
@@ -575,8 +582,22 @@ final class ConversationController: ObservableObject {
         let chatId = UUID().uuidString
         self.currentChatRef = chatId
 
+        // Screen vision: attach a frame of the user's current work when enabled + permitted.
+        // Capture failures (nothing to look at, missing permission) are non-fatal — she just
+        // doesn't see anything this turn.
+        var visionImages: [Data] = []
+        Log.pipeline("[Vision] gate: enabled=\(screenVisionEnabled), hasService=\(screenVisionService != nil), hasAccess=\(screenVisionService?.hasAccess ?? false)")
+        if screenVisionEnabled, let vision = screenVisionService, vision.hasAccess {
+            do {
+                visionImages = [try await vision.captureCurrentWork()]
+            } catch {
+                Log.pipeline("[Vision] Capture skipped: \(error.localizedDescription)")
+            }
+        }
+        Log.pipeline("[Vision] attaching \(visionImages.count) image(s) to turn")
+
         // Send chat request via the transport.
-        try await chatTransport.send(.chat(id: chatId, messages: apiMessages))
+        try await chatTransport.send(.chat(id: chatId, messages: apiMessages, images: visionImages))
 
         isStreaming = true
         startLipSyncObservation()

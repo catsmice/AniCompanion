@@ -9,7 +9,9 @@ import Combine
 
 /// Outgoing messages from the client to the chat backend.
 enum WSOutgoing: Sendable {
-    case chat(id: String, messages: [[String: String]])
+    /// A chat turn. `images` (JPEG data) are optional screen-vision frames attached to the final
+    /// user message as OpenAI content-parts; empty for the normal text-only path.
+    case chat(id: String, messages: [[String: String]], images: [Data])
     case cancel(ref: String)
     case ack(ref: String)
 }

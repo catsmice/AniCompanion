@@ -188,11 +188,13 @@ final class AppState: ObservableObject {
             chatTransport: ws,
             ttsService: ttsService,
             sttService: sttService,
+            screenVisionService: screenVisionService,
             audioPlayer: audioPlayer,
             history: conversationHistory,
             characterController: characterManager
         )
         controller.ttsEnabled = ttsEnabled
+        controller.screenVisionEnabled = screenVisionEnabled
         conversationController = controller
 
         // Verify gateway reachability (HTTP health check).
