@@ -53,6 +53,7 @@ struct SettingsView: View {
     // Screen vision (default off; opt-in with consent).
     @State private var screenVisionEnabled: Bool = false
     @State private var screenVisionScope: ScreenVisionScope = .focusedWindow
+    @State private var visionProactiveIntervalMinutes: Int = 5
     @State private var showVisionConsent = false
     @State private var screenRecordingGranted = false
     @State private var visionPreview: NSImage?
@@ -465,6 +466,21 @@ struct SettingsView: View {
                                     .foregroundStyle(.white.opacity(0.4))
                                     .fixedSize(horizontal: false, vertical: true)
 
+                                SettingsField(label: "Glance interval") {
+                                    Picker("", selection: $visionProactiveIntervalMinutes) {
+                                        ForEach([2, 5, 10, 15, 30], id: \.self) { m in
+                                            Text("\(m) min").tag(m)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .labelsHidden()
+                                }
+
+                                Text("How often she glances at your screen while you're heads-down. She only speaks up if there's something worth mentioning.")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.white.opacity(0.4))
+                                    .fixedSize(horizontal: false, vertical: true)
+
                                 if !screenRecordingGranted {
                                     HStack(spacing: 8) {
                                         Image(systemName: "exclamationmark.triangle.fill")
@@ -742,6 +758,7 @@ struct SettingsView: View {
         vrmModelFilename = appState.vrmModelFilename
         screenVisionEnabled = appState.screenVisionEnabled
         screenVisionScope = ScreenVisionScope(rawValue: appState.screenVisionScope) ?? .focusedWindow
+        visionProactiveIntervalMinutes = appState.visionProactiveIntervalMinutes
         screenRecordingGranted = appState.screenVisionService.hasAccess
     }
 
@@ -780,6 +797,7 @@ struct SettingsView: View {
         appState.vrmModelFilename = vrmModelFilename
         appState.screenVisionEnabled = screenVisionEnabled
         appState.screenVisionScope = screenVisionScope.rawValue
+        appState.visionProactiveIntervalMinutes = visionProactiveIntervalMinutes
 
         // Persist the language. The character/persona + STT pick it up immediately on
         // reinitialize; the SwiftUI interface needs `AppleLanguages` + a relaunch.

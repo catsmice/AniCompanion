@@ -85,6 +85,9 @@ final class AppState: ObservableObject {
     /// What screen vision captures — the focused window (default) or the whole screen.
     @AppStorage(ScreenVisionScope.storageKey) var screenVisionScope: String = ScreenVisionScope.focusedWindow.rawValue
 
+    /// How often (in minutes) 小光 glances at your screen proactively while vision is on.
+    @AppStorage("vision_proactive_interval_minutes") var visionProactiveIntervalMinutes: Int = 5
+
     private var effectiveVRMModelFilename: String {
         let filename = vrmModelFilename.trimmingCharacters(in: .whitespacesAndNewlines)
         return filename.isEmpty ? "AliciaSolid.vrm" : filename
@@ -195,6 +198,7 @@ final class AppState: ObservableObject {
         )
         controller.ttsEnabled = ttsEnabled
         controller.screenVisionEnabled = screenVisionEnabled
+        controller.visionProactiveIntervalSeconds = Double(visionProactiveIntervalMinutes * 60)
         conversationController = controller
 
         // Verify gateway reachability (HTTP health check).

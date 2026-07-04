@@ -1,6 +1,24 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Glance interval" : {
+      "comment" : "Settings: screen vision proactive-glance interval",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "查看間隔" } }
+      }
+    },
+    "%lld min" : {
+      "comment" : "Settings: minutes option for glance interval",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%lld 分鐘" } }
+      }
+    },
+    "How often she glances at your screen while you're heads-down. She only speaks up if there's something worth mentioning." : {
+      "comment" : "Settings: glance interval hint",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "當你專心工作時，她多久看一次你的螢幕。只有在有值得一提的事情時她才會開口。" } }
+      }
+    },
     "Screen Vision" : {
       "comment" : "Settings section: screen vision",
       "localizations" : {

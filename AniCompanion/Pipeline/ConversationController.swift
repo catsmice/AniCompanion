@@ -126,6 +126,11 @@ final class ConversationController: ObservableObject {
     /// Inactivity duration (in seconds) before 小光 speaks up.
     private let proactiveInterval: TimeInterval = 3600 // 60 minutes
 
+    /// Shorter proactive interval used while screen vision is on — she glances at your screen more
+    /// often, but only speaks if there's something worthwhile (see `buildVisionGlancePrompt`). Set
+    /// from Settings via `AppState`.
+    var visionProactiveIntervalSeconds: TimeInterval = 300 // 5 minutes
+
     /// Whether the launch greeting has already been sent this session.
     private var hasGreetedOnLaunch: Bool = false
 
@@ -312,7 +317,12 @@ final class ConversationController: ObservableObject {
         isProcessing = true
 
         let timeString = Self.formattedCurrentTime()
-        let instruction = prompt ?? buildIdleTaskPrompt(time: timeString)
+        // When vision is on, an unprompted proactive turn becomes a screen glance (she looks at the
+        // attached screenshot and self-gates on whether it's worth saying anything); otherwise it's
+        // the usual idle-task prompt.
+        let instruction = prompt ?? (screenVisionEnabled
+            ? buildVisionGlancePrompt(time: timeString)
+            : buildIdleTaskPrompt(time: timeString))
 
         history.addUserMessage(instruction, isHidden: true)
         let messageCountBeforePipeline = history.messages.count
@@ -346,7 +356,8 @@ final class ConversationController: ObservableObject {
     private func startProactiveTimer() {
         proactiveTimer?.cancel()
         let timer = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
-        timer.schedule(deadline: .now() + proactiveInterval)
+        let interval = screenVisionEnabled ? visionProactiveIntervalSeconds : proactiveInterval
+        timer.schedule(deadline: .now() + interval)
         timer.setEventHandler { [weak self] in
             Task { @MainActor [weak self] in
                 await self?.sendProactiveMessage()
@@ -391,6 +402,13 @@ final class ConversationController: ObservableObject {
         return persona.idlePromptTemplate
             .replacingOccurrences(of: "{time}", with: time)
             .replacingOccurrences(of: "{task}", with: task)
+    }
+
+    /// Proactive prompt used when screen vision is on: she looks at the attached screenshot and
+    /// comments only if it's genuinely worthwhile — otherwise she replies with nothing, and the
+    /// empty response is dropped by `sendProactiveMessage`, so she just stays quiet.
+    private func buildVisionGlancePrompt(time: String) -> String {
+        persona.visionGlanceTemplate.replacingOccurrences(of: "{time}", with: time)
     }
 
     // MARK: - Event Listener
@@ -624,6 +642,16 @@ final class ConversationController: ObservableObject {
         charController?.stopAnimation()
 
         let rawResponse = await pipelineState.getRawResponse()
+
+        // Screen-vision "stay silent": on a glance the model is told to output a sentinel when
+        // nothing is worth saying. Suppress it entirely — no history, no speech, no bubble — so she
+        // just stays quiet. This is what makes the proactive glance feel smart rather than chatty.
+        if Self.isSilentResponse(rawResponse) {
+            streamingText = ""
+            isStreaming = false
+            return
+        }
+
         if !rawResponse.isEmpty {
             history.addAssistantMessage(rawResponse)
         }
@@ -823,6 +851,21 @@ final class ConversationController: ObservableObject {
     }
 
     // MARK: - Text Utilities
+
+    /// Whether a model reply means "say nothing" — used to suppress screen-vision glances the model
+    /// decided weren't worth commenting on. True for an empty reply, the explicit `[silent]`
+    /// sentinel, or a lone bracketed aside (the model narrating its silence instead of staying
+    /// quiet). Her real replies are speech (after an emotion tag), never a bare bracketed token.
+    static func isSilentResponse(_ raw: String) -> Bool {
+        let t = stripEmotionTags(from: raw).trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.isEmpty { return true }
+        if t.lowercased().contains("[silent]") { return true }
+        let pairs: [(Character, Character)] = [("(", ")"), ("（", "）"), ("[", "]"), ("［", "］"), ("「", "」")]
+        if let f = t.first, let l = t.last, pairs.contains(where: { $0.0 == f && $0.1 == l }) {
+            return true
+        }
+        return false
+    }
 
     /// Strip emotion tags from a string for clean display/history storage.
     static func stripEmotionTags(from text: String) -> String {

@@ -10,6 +10,9 @@ struct Persona: Sendable {
     let launchGreetingTemplate: String
     let idlePromptTemplate: String
     let idleTasks: [String]
+    /// Proactive prompt used (instead of an idle task) when screen vision is on: she looks at the
+    /// attached screenshot and comments only if it's genuinely worthwhile, else stays quiet.
+    let visionGlanceTemplate: String
 
     static func load(language: AppLanguage) -> Persona {
         let systemPrompt = loadText("system_prompt", ext: "txt", language: language)
@@ -24,9 +27,21 @@ struct Persona: Sendable {
             systemPrompt: systemPrompt,
             launchGreetingTemplate: proactive.launchGreetingTemplate,
             idlePromptTemplate: proactive.idlePromptTemplate,
-            idleTasks: proactive.idleTasks
+            idleTasks: proactive.idleTasks,
+            visionGlanceTemplate: proactive.visionGlanceTemplate ?? Self.defaultVisionGlanceTemplate
         )
     }
+
+    /// Built-in fallback for the vision glance, used when a `proactive.json` predates the field.
+    static let defaultVisionGlanceTemplate = """
+    Current time: {time}
+    You can see your Master's screen right now (attached). Glance at it. If there's something \
+    genuinely worth reacting to — a problem or error you could help with, something interesting, or \
+    something fun to comment on in character — say it briefly and naturally. If it's mundane, looks \
+    private/sensitive, or you have nothing worthwhile to add, reply with exactly [silent] and \
+    nothing else. Don't narrate or explain your silence — either say something genuinely useful, or \
+    output [silent].
+    """
 
     // MARK: - Resource loading
 
@@ -49,6 +64,8 @@ private struct ProactivePrompts: Decodable {
     let launchGreetingTemplate: String
     let idlePromptTemplate: String
     let idleTasks: [String]
+    /// Optional so older/partial `proactive.json` files still decode; `Persona` supplies a default.
+    let visionGlanceTemplate: String?
 
     static func load(language: AppLanguage) -> ProactivePrompts? {
         guard let url = Bundle.main.url(
@@ -60,6 +77,7 @@ private struct ProactivePrompts: Decodable {
     static let fallback = ProactivePrompts(
         launchGreetingTemplate: "Current time: {time}\nThe user just came online. Greet them naturally.",
         idlePromptTemplate: "Current time: {time}\nTask: {task}",
-        idleTasks: ["Share something interesting you thought of with the user."]
+        idleTasks: ["Share something interesting you thought of with the user."],
+        visionGlanceTemplate: nil
     )
 }
