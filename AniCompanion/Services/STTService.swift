@@ -225,6 +225,11 @@ final class STTService: STTServiceProtocol {
         // Create the recognition request.
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
+        // Prefer on-device recognition when the locale supports it: no network, private, and
+        // (crucially for hands-free continuous listening) not subject to server rate limits.
+        if recognizer.supportsOnDeviceRecognition {
+            request.requiresOnDeviceRecognition = true
+        }
         self.recognitionRequest = request
 
         // Start audio capture via the non-isolated helper (avoids Swift 6 actor isolation crash).

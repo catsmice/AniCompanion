@@ -143,12 +143,22 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
   STTServiceProtocol`; the Settings **Speech Input** section swaps providers and shows per-provider
   fields (endpoint/key/model). Apple stays the default. Adding a provider = implement
   `STTServiceProtocol` + add a case (mirrors the agent-backend seam).
-- **STTService** (@MainActor): SFSpeechRecognizer, on-device recognition (default zh-Hant-TW)
+- **STTService** (@MainActor): SFSpeechRecognizer, on-device recognition (default zh-Hant-TW). Forces
+  `requiresOnDeviceRecognition = true` when the locale supports it — private, offline, and (key for
+  hands-free continuous listening) not subject to server rate limits.
 - **STTAudioCapture** (non-isolated): Separate helper for AVAudioEngine + installTap to avoid a Swift 6 @MainActor isolation crash on the audio thread
 - **WhisperSTTService** (@MainActor): records mic → WAV, then `POST /v1/audio/transcriptions`
   (multipart) to a Whisper endpoint. Uses its own non-`@MainActor` `WhisperAudioCapture` for the tap
   (same Swift-6 fix as `STTAudioCapture`); auto-stops on silence via an RMS-driven Timer.
 - Auto-stop on 2s silence via Timer
+- **Hands-free mode** (`ConversationController.setHandsFree` + `voice_hands_free_enabled`): opt-in
+  continuous-listen loop (Settings → Speech Input). A generation-tokened background task re-arms the mic
+  after every turn (`listenOnceAndRespond` → `sendMessage` awaits the full pipeline → re-arm), so the
+  user talks hands-free. **Half-duplex** — the loop opens the mic *only while idle* (guards on
+  `isProcessing || isSpeaking || isListening`), never during her own TTS, so she can't capture herself
+  (no AEC needed). Voice barge-in *mid-speech* still uses the mic button (`startVoiceInput` →
+  `cancelInternal`). A fatal STT error stops the loop (no spin); benign no-speech/cancellation just
+  re-arm. Full-duplex talk-over-her (VPIO AEC) is a deferred Phase 2.
 
 ### Screen Vision (opt-in, off by default)
 
@@ -196,6 +206,8 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
   - MiniMax: **API Key**, **Group ID**, **Voice ID**
   - OpenAI: **API Key**, **TTS Model**, **Voice**, **Voice Instructions**, **Speed**
   - BlueMagpie: **Server** URL (default `http://127.0.0.1:8765`) + **Inference Timesteps**
+- **Speech Input → Hands-free mode** *(off by default)* — continuous listening: the mic auto re-arms
+  after each reply so you just talk (half-duplex; interrupt mid-speech with the mic button)
 - **Speech Input → STT Provider** (`Apple` | `Groq` | `OpenAI` | `OpenAI-compatible`):
   - Apple: on-device, no key
   - Groq / OpenAI / OpenAI-compatible: **Endpoint**, **API Key**, **Model** (Whisper)
@@ -243,7 +255,8 @@ it answers from the model.
 
 Implemented: VRM rendering + spring bones, streaming chat via Hermes, pluggable TTS (Apple
 on-device + MiniMax + OpenAI + local BlueMagpie) with lip sync, pluggable STT voice input (Apple
-on-device + Groq/OpenAI Whisper), opt-in **screen vision** (ScreenCaptureKit capture → multimodal
+on-device + Groq/OpenAI Whisper), opt-in **hands-free mode** (continuous-listen loop, half-duplex),
+opt-in **screen vision** (ScreenCaptureKit capture → multimodal
 model, with smart
 self-gating proactive glances), live streaming chat UI, 16 emotions, skeletal animation clips,
 proactive idle timer (60 min, or a shorter configurable interval when screen vision is on),
@@ -251,4 +264,7 @@ configurable VRM model (Settings), desktop pet mode (non-activating transparent 
 with resize + speech bubble).
 
 Not yet done / deferred:
+- Full-duplex voice barge-in (Phase 2): talk over her by voice via VPIO acoustic-echo-cancellation
+  (`setVoiceProcessingEnabled`) — needs unifying the mic + playback audio engines. Today's hands-free
+  is half-duplex (interrupt mid-speech via the mic button).
 - Cron-scheduled proactive push (needs polling Hermes' jobs API or a delivery adapter)

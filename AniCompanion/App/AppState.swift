@@ -80,6 +80,9 @@ final class AppState: ObservableObject {
     @AppStorage("stt_api_key_compatible") var sttAPIKeyCompatible: String = ""
     @AppStorage("stt_model_compatible") var sttModelCompatible: String = "whisper-1"
 
+    /// Hands-free voice mode: continuously re-arm the mic after each turn (half-duplex).
+    @AppStorage("voice_hands_free_enabled") var voiceHandsFreeEnabled: Bool = false
+
     /// VRM model filename under Resources/VRMModel.
     @AppStorage("vrm_model_filename") var vrmModelFilename: String = "AliciaSolid.vrm"
 
@@ -204,6 +207,7 @@ final class AppState: ObservableObject {
         controller.ttsEnabled = ttsEnabled
         controller.screenVisionEnabled = screenVisionEnabled
         controller.visionProactiveIntervalSeconds = Double(visionProactiveIntervalMinutes * 60)
+        controller.setHandsFree(voiceHandsFreeEnabled)
         conversationController = controller
 
         // Verify gateway reachability (HTTP health check).

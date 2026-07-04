@@ -144,6 +144,18 @@ final class ConversationController: ObservableObject {
     /// Index of the last idle task chosen, to avoid repeats.
     private var lastIdleTaskIndex: Int = -1
 
+    /// Whether hands-free (continuous listening) voice mode is on. When true, the mic
+    /// auto re-arms after each turn so the user can converse without touching the mic
+    /// button. Half-duplex: the mic is opened only while idle (never during her own
+    /// speech), so she never hears herself — voice barge-in mid-speech still uses the button.
+    private(set) var handsFreeEnabled: Bool = false
+
+    /// The long-lived task running the hands-free listen→respond→re-arm loop.
+    private var handsFreeTask: Task<Void, Never>?
+
+    /// Invalidation token so a stale loop exits when hands-free is toggled off/on.
+    private var handsFreeGeneration: UInt64 = 0
+
     // MARK: - Initialization
 
     /// Creates a new conversation controller with all required dependencies.
@@ -281,6 +293,99 @@ final class ConversationController: ObservableObject {
     func stopVoiceInput() {
         sttService?.stopListening()
         isListening = false
+    }
+
+    // MARK: - Hands-Free Voice Loop
+
+    /// Turn hands-free (continuous listening) voice mode on or off. Idempotent.
+    ///
+    /// When on, a background loop re-arms the mic after each turn so the user can talk
+    /// without touching the mic button. Half-duplex: the loop opens the mic only while idle
+    /// (not while she is processing or speaking), so she never captures her own TTS.
+    func setHandsFree(_ enabled: Bool) {
+        guard enabled != handsFreeEnabled else { return }
+        handsFreeEnabled = enabled
+        if enabled {
+            startHandsFreeLoop()
+        } else {
+            stopHandsFreeLoop()
+        }
+    }
+
+    private func startHandsFreeLoop() {
+        guard sttService != nil else { return }
+        // Invalidate any previous loop and start a fresh one.
+        handsFreeTask?.cancel()
+        handsFreeGeneration &+= 1
+        let generation = handsFreeGeneration
+        Log.pipeline("[Pipeline] Hands-free loop starting (gen \(generation))")
+
+        handsFreeTask = Task { @MainActor [weak self] in
+            while true {
+                guard let self,
+                      self.handsFreeEnabled,
+                      self.handsFreeGeneration == generation,
+                      !Task.isCancelled else { break }
+
+                // Half-duplex: only open the mic while fully idle, never during her own turn.
+                if self.isProcessing || self.isSpeaking || self.isListening {
+                    try? await Task.sleep(for: .milliseconds(250))
+                    continue
+                }
+
+                let fatal = await self.listenOnceAndRespond()
+                if fatal {
+                    self.handsFreeEnabled = false
+                    break
+                }
+
+                // A short breath before re-arming — avoids a tight spin on transient errors.
+                try? await Task.sleep(for: .milliseconds(350))
+            }
+            Log.pipeline("[Pipeline] Hands-free loop ended (gen \(generation))")
+        }
+    }
+
+    private func stopHandsFreeLoop() {
+        handsFreeGeneration &+= 1 // invalidate any running loop
+        handsFreeTask?.cancel()
+        handsFreeTask = nil
+        if isListening {
+            sttService?.stopListening()
+            isListening = false
+        }
+    }
+
+    /// Listen for a single utterance and, if speech was captured, send it. Used by the
+    /// hands-free loop. Unlike `startVoiceInput`, it never barges in (the loop only calls it
+    /// while idle). Returns `true` on a fatal STT error (e.g. permission denied) so the loop
+    /// stops instead of spinning; benign "no speech"/cancellation end the stream without throwing.
+    private func listenOnceAndRespond() async -> Bool {
+        guard let sttService, !isListening else { return false }
+        isListening = true
+        lastError = nil
+
+        do {
+            let stream = sttService.startListening(
+                locale: Locale(identifier: AppLanguage.current.sttLocaleIdentifier)
+            )
+            var finalTranscription = ""
+            for try await transcription in stream {
+                finalTranscription = transcription
+            }
+            isListening = false
+
+            let trimmed = finalTranscription.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                await sendMessage(trimmed)
+            }
+            return false
+        } catch {
+            isListening = false
+            lastError = error
+            Log.pipeline("[Pipeline] Hands-free listen error — stopping hands-free: \(error)")
+            return true
+        }
     }
 
     /// Cancel any ongoing processing, stop audio playback, and reset state.

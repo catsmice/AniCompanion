@@ -43,6 +43,7 @@ struct SettingsView: View {
     @State private var sttEndpointCompatible: String = "http://127.0.0.1:8000"
     @State private var sttAPIKeyCompatible: String = ""
     @State private var sttModelCompatible: String = "whisper-1"
+    @State private var voiceHandsFreeEnabled: Bool = false
     @State private var language: AppLanguage = .english
     @State private var vrmModelFilename: String = "AliciaSolid.vrm"
 
@@ -391,6 +392,16 @@ struct SettingsView: View {
 
                     SettingsSection(title: "Speech Input", icon: "mic.fill") {
                         VStack(alignment: .leading, spacing: 14) {
+                            Toggle("Hands-free mode", isOn: $voiceHandsFreeEnabled)
+                                .toggleStyle(.switch)
+
+                            Text("Keep listening and reply automatically — just talk, no need to click the mic each time. She listens only while idle, so you take turns; to cut her off mid-sentence, click the mic button.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.white.opacity(0.4))
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            Divider().background(Color.white.opacity(0.08))
+
                             SettingsField(label: "STT Provider") {
                                 Picker("", selection: $sttProvider) {
                                     ForEach(STTProvider.allCases) { provider in
@@ -798,6 +809,7 @@ struct SettingsView: View {
         sttEndpointCompatible = appState.sttEndpointCompatible
         sttAPIKeyCompatible = appState.sttAPIKeyCompatible
         sttModelCompatible = appState.sttModelCompatible
+        voiceHandsFreeEnabled = appState.voiceHandsFreeEnabled
         language = AppLanguage.current
         vrmModelFilename = appState.vrmModelFilename
         screenVisionEnabled = appState.screenVisionEnabled
@@ -840,6 +852,7 @@ struct SettingsView: View {
         appState.sttEndpointCompatible = sttEndpointCompatible
         appState.sttAPIKeyCompatible = sttAPIKeyCompatible
         appState.sttModelCompatible = sttModelCompatible
+        appState.voiceHandsFreeEnabled = voiceHandsFreeEnabled
         appState.vrmModelFilename = vrmModelFilename
         appState.screenVisionEnabled = screenVisionEnabled
         appState.screenVisionScope = screenVisionScope.rawValue
