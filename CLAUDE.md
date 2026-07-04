@@ -21,6 +21,10 @@ macOS desktop AI character app with VRM 3D character rendering, LLM chat, TTS sp
 - **STT**: Pluggable provider (`STTProvider`) — **Apple** Speech Framework (on-device, default) or
   cloud **Whisper** (`POST /v1/audio/transcriptions`) via **Groq**, **OpenAI**, or any
   **OpenAI-compatible** endpoint. User supplies the cloud key.
+- **Screen Vision** *(opt-in, off by default)*: `ScreenVisionService` (ScreenCaptureKit) captures the
+  user's focused window (or whole screen) and attaches it as an OpenAI `image_url` content-part to the
+  chat turn, so a multimodal model can "see the screen." Needs a vision-capable model + macOS Screen
+  Recording permission.
 - **Audio**: AVAudioEngine + AVAudioPlayerNode
 - **Dependencies**: no SPM packages — three-vrm + three.js load via CDN import maps; networking via
   URLSession, audio via AVFoundation. See `ATTRIBUTION.md`.
@@ -32,7 +36,7 @@ AniCompanion/
 ├── AniCompanion/
 │   ├── App/             # App entry (AniCompanionApp), AppDelegate (owns the NSWindow + pet mode), AppState, AppLanguage, Log
 │   ├── Views/           # SwiftUI views (Main, Chat, Settings) + DesktopPet (PetDragView)
-│   ├── Services/        # ChatTransport + HTTPChatService (Hermes), TTS (TTSProvider: MiniMax + OpenAI + BlueMagpie), STT, AudioPlayer, ObjCSupport
+│   ├── Services/        # ChatTransport + HTTPChatService (Hermes), TTS (TTSProvider: MiniMax + OpenAI + BlueMagpie), STT, ScreenVision, AudioPlayer, ObjCSupport
 │   ├── Character/       # ThreeVRMCharacterManager, ThreeVRMRenderView (WKWebView bridge to three-vrm)
 │   ├── Pipeline/        # Orchestration (ConversationController, SentenceParser, AudioQueue)
 │   ├── Models/          # Data models (ChatMessage, Emotion, ConversationHistory, AnimationClip)
@@ -134,6 +138,24 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
   (same Swift-6 fix as `STTAudioCapture`); auto-stops on silence via an RMS-driven Timer.
 - Auto-stop on 2s silence via Timer
 
+### Screen Vision (opt-in, off by default)
+
+- **ScreenVisionService** (@MainActor): ScreenCaptureKit (`SCScreenshotManager`, macOS 14+). Two scopes
+  (`ScreenVisionScope`): `focusedWindow` (default) captures the frontmost window of the **last-activated
+  non-self app** (tracked via `NSWorkspace` activation) so talking to 小光 never captures *her*;
+  `entireScreen` captures the display excluding our own windows. Output is a downscaled JPEG; permission
+  via `CGPreflight`/`CGRequestScreenCaptureAccess`. Long-lived on `AppState` (tracks the active app all
+  session). Enabling it goes through a Settings consent alert, then the macOS permission prompt.
+- **Multimodal transport**: `WSOutgoing.chat` carries `images: [Data]`; `HTTPChatService.encodeMessages`
+  rebuilds the final user message's content into OpenAI content-parts (text + `image_url` base64-JPEG
+  data URL) only when images are present (the text-only path is unchanged). `runPipeline` captures one
+  frame per turn when enabled + permitted (non-fatal on failure), on both user and proactive turns.
+- **Smart proactive glances**: while vision is on, the proactive timer uses a shorter, Settings-
+  configurable interval (`visionProactiveIntervalSeconds`, default 5 min) and swaps the idle-task prompt
+  for `Persona.visionGlanceTemplate` — she looks at the attached frame and speaks only if it's
+  worthwhile, else emits a `[silent]` sentinel. `ConversationController.isSilentResponse` suppresses
+  `[silent]` / empty / a lone bracketed aside (no history, speech, or bubble) — attentive, not chatty.
+
 ## Conventions
 
 - All UI state managed through `AppState` (@MainActor, ObservableObject)
@@ -165,6 +187,9 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
   - Apple: on-device, no key
   - Groq / OpenAI / OpenAI-compatible: **Endpoint**, **API Key**, **Model** (Whisper)
 - **Language** (interface + character + STT)
+- **Screen Vision** *(off by default)* — **Let her see your screen** toggle (consent alert → Screen
+  Recording permission), **Capture** scope (Focused window | Entire screen), **Glance interval** (how
+  often she proactively glances while vision is on), and a **Test: capture now** preview.
 
 Desktop Pet mode is not in this panel — toggle it from the 🐾 toolbar button, the **Character**
 menu, or **⌘⇧D**.
@@ -195,14 +220,20 @@ it answers from the model.
 - **Testing the language switch from the CLI is unreliable**: the app is non-sandboxed (reads `~/Library/Preferences/com.anicompanion.app.plist`), but a leftover sandbox **container** makes `defaults read/write com.anicompanion.app` silently redirect to `~/Library/Containers/com.anicompanion.app/...`, which the app never reads. Verify the real language switch via **Settings → Language** in-app, or write directly to the global plist with `PlistBuddy` + `killall cfprefsd`.
 - **`OptionSet.contains(.borderless)` is ALWAYS true**: `.borderless` is rawValue `0` (the empty set), so `styleMask.contains(.borderless)` is a tautology. Detecting "is the window in pet mode?" this way made the whole transition dead code (Desktop Pet "did nothing"). Detect window state via a non-zero member (`!styleMask.contains(.titled)`) or, better, an explicit tracked `Bool` you own — don't re-derive state you already hold (`AppDelegate.isPetActive`). General trap: any `static let foo: T = []` makes `.contains(foo)` constant.
 - **Transparent windows: bypass SwiftUI, use the bare WKWebView as `contentView`**: SwiftUI `WindowGroup` / `NSHostingController` re-assert an opaque window background, and `ThreeVRMRenderView` has its own opaque `RadialGradient` behind the WebView — both block desktop-through transparency. Desktop Pet mode (`AppDelegate.enterPet`) puts the **bare** `WKWebView` (already transparent via `drawsBackground=false` + three.js `alpha:true`) directly as a borderless `isOpaque=false` window's `contentView`. The persistent webView is reused (no reload); resize the window to the pet size **before** installing the webView and dispatch a JS `resize` so three.js re-frames.
+- **NSPanel pet mode vs. `applicationShouldTerminateAfterLastWindowClosed`**: the main window is an `NSPanel` (so pet mode can use `.nonactivatingPanel` — she floats over your work without stealing focus). AppKit does **not** count panels toward the "last window closed" check, so returning `true` there quit the whole app whenever an auxiliary window (Settings) closed. Fix: return `false` and quit explicitly in `windowWillClose` only when the *main* window closes; also `hidesOnDeactivate = false` (panels hide on deactivate by default).
+- **Screen Recording permission resets on every rebuild**: ad-hoc "Sign to Run Locally" changes the code signature (cdhash) each build, and Screen Recording is a high-security TCC permission bound to the *signature* — so the grant drops on every rebuild (Mic/Speech survive because they key on the bundle id). Dev workaround: sign the dev build with a stable self-signed code-signing cert — see `CONTRIBUTING.md` → *Testing screen vision*.
+- **LaunchServices bundle-id collision**: if another build with the same bundle id is registered (a second checkout, an installed copy), `open <path>` can launch a stale copy that exits. `scripts/run-app.sh` runs `lsregister -f` on the freshly-built app before `open` to force the right one.
+- **Vision glance "stay silent" leaks as text**: told to "say nothing," models narrate their silence (`(nothing worth adding…)`) instead of returning empty. Fix: a `[silent]` sentinel in `Persona.visionGlanceTemplate` + `ConversationController.isSilentResponse` (also catches empty and a lone bracketed aside) to suppress the whole turn.
 
 ## Status
 
 Implemented: VRM rendering + spring bones, streaming chat via Hermes, pluggable TTS (MiniMax +
 OpenAI + local BlueMagpie) with lip sync, pluggable STT voice input (Apple on-device + Groq/OpenAI
-Whisper), live streaming chat UI, 16 emotions,
-skeletal animation clips, 60-min proactive idle timer, configurable VRM model (Settings), desktop
-pet mode (borderless/transparent draggable overlay with resize + speech bubble).
+Whisper), opt-in **screen vision** (ScreenCaptureKit capture → multimodal model, with smart
+self-gating proactive glances), live streaming chat UI, 16 emotions, skeletal animation clips,
+proactive idle timer (60 min, or a shorter configurable interval when screen vision is on),
+configurable VRM model (Settings), desktop pet mode (non-activating transparent draggable overlay
+with resize + speech bubble).
 
 Not yet done / deferred:
 - Cron-scheduled proactive push (needs polling Hermes' jobs API or a delivery adapter)

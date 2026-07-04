@@ -24,10 +24,11 @@ pluggable (see [Bring your own agent](#bring-your-own-agent)).
 **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** is the reference backend, validated
 end-to-end and runnable locally so your conversations stay on your machine.
 
-> **A note on cloud voice services:** speech stays on your Mac with the defaults — **Apple** STT is
+> **A note on what leaves your Mac:** with the defaults, your data stays local — **Apple** STT is
 > on-device and the local **BlueMagpie** TTS runs on your machine. If you opt into a *cloud* provider
-> (MiniMax/OpenAI TTS, or Groq/OpenAI Whisper STT), the corresponding text or **microphone audio is
-> sent to that provider** for processing. Pick Apple STT to keep voice input fully local.
+> (MiniMax/OpenAI TTS, or Groq/OpenAI Whisper STT), the corresponding text or **microphone audio** is
+> sent to that provider. And if you turn on **screen vision** (off by default), screenshots of your
+> work are sent to your chat model — which may be a cloud provider — so 小光 can see your screen.
 
 | English | 繁體中文 |
 |:---:|:---:|
