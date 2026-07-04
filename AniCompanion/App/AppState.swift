@@ -22,7 +22,7 @@ final class AppState: ObservableObject {
     @AppStorage("minimax_group_id") var minimaxGroupID: String = ""
 
     /// Which TTS provider to use when voice output is enabled.
-    @AppStorage(TTSProvider.storageKey) var ttsProvider: String = TTSProvider.miniMax.rawValue
+    @AppStorage(TTSProvider.storageKey) var ttsProvider: String = TTSProvider.apple.rawValue
 
     /// Base URL for a local BlueMagpie-TTS HTTP server.
     @AppStorage("bluemagpie_tts_endpoint") var blueMagpieTTSEndpoint: String = "http://127.0.0.1:8765"
@@ -44,6 +44,11 @@ final class AppState: ObservableObject {
 
     /// OpenAI speech speed multiplier.
     @AppStorage("openai_tts_speed") var openAITTSSpeed: Double = 1.0
+
+    /// Apple on-device TTS: empty = auto-pick the best installed voice for the current language.
+    @AppStorage("apple_tts_voice_identifier") var appleTTSVoiceIdentifier: String = AppleTTSService.autoVoiceIdentifier
+
+    @AppStorage("apple_tts_rate") var appleTTSRate: Double = AppleTTSService.defaultRate
 
     /// Which agent backend to talk to. See `ChatBackend`. Each backend stores its own
     /// endpoint + key under per-backend keys (see `ChatBackend.savedEndpoint()` /
@@ -238,7 +243,12 @@ final class AppState: ObservableObject {
     }
 
     private func makeTTSService() -> any TTSServiceProtocol {
-        switch TTSProvider(rawValue: ttsProvider) ?? .miniMax {
+        switch TTSProvider(rawValue: ttsProvider) ?? .apple {
+        case .apple:
+            return AppleTTSService(
+                voiceIdentifier: appleTTSVoiceIdentifier,
+                rate: appleTTSRate
+            )
         case .miniMax:
             return TTSService(
                 apiKey: minimaxAPIKey,

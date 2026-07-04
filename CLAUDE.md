@@ -14,10 +14,11 @@ macOS desktop AI character app with VRM 3D character rendering, LLM chat, TTS sp
 - **Character rendering**: VRM via three-vrm (pixiv) in WKWebView + WebGL
 - **LLM**: Local **Hermes Agent** gateway — OpenAI-compatible HTTP API (`POST
   http://127.0.0.1:8642/v1/chat/completions`, `stream:true` SSE, Bearer auth). Bring your own.
-- **TTS**: Pluggable provider (`TTSProvider`) — **MiniMax** Speech-02-Turbo (streaming SSE,
-  hex-encoded MP3, cloud), **OpenAI** Speech API (`POST /v1/audio/speech`, WAV), or a local
-  **BlueMagpie-TTS** HTTP server (`POST /v1/tts`, WAV). User supplies the cloud provider key, or
-  runs the BlueMagpie server (see `Tools/blue_magpie_tts_server.py`)
+- **TTS**: Pluggable provider (`TTSProvider`) — **Apple** on-device `AVSpeechSynthesizer` (no key,
+  no network, WAV; **default**), **MiniMax** Speech-02-Turbo (streaming SSE, hex-encoded MP3, cloud), **OpenAI**
+  Speech API (`POST /v1/audio/speech`, WAV), or a local **BlueMagpie-TTS** HTTP server (`POST
+  /v1/tts`, WAV). User supplies the cloud provider key, or runs the BlueMagpie server (see
+  `Tools/blue_magpie_tts_server.py`)
 - **STT**: Pluggable provider (`STTProvider`) — **Apple** Speech Framework (on-device, default) or
   cloud **Whisper** (`POST /v1/audio/transcriptions`) via **Groq**, **OpenAI**, or any
   **OpenAI-compatible** endpoint. User supplies the cloud key.
@@ -91,14 +92,25 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
   via a long-lived listener; bridge-stream pattern (tokens → AsyncThrowingStream continuation);
   60-min proactive idle timer. (A dormant `notify`/`runNotificationPipeline`/`ack` path remains for a
   future cron-push integration; nothing emits `notify` today.)
-- **TTSProvider** (enum registry): the voice analogue of `ChatBackend`. `miniMax` (cloud
-  Speech-02-Turbo, hex-encoded MP3 over SSE) + `openAI` (cloud `POST /v1/audio/speech`,
-  WAV output) + `blueMagpie` (local `POST /v1/tts`, WAV).
-  `AppState.makeTTSService()` builds the selected `any TTSServiceProtocol`; the Settings **TTS
-  Provider** picker swaps providers and shows per-provider fields. `AudioPlayerService` sniffs the
-  RIFF/`WAVE` magic bytes to choose the temp-file extension, so OpenAI/BlueMagpie WAV and MiniMax
-  MP3 both decode through one `AVAudioFile` path. Adding a provider = implement
-  `TTSServiceProtocol` + add a case (mirrors the agent-backend seam).
+- **TTSProvider** (enum registry): the voice analogue of `ChatBackend`. `apple` (on-device
+  `AVSpeechSynthesizer`, no key/network, WAV) + `miniMax` (cloud Speech-02-Turbo, hex-encoded MP3
+  over SSE) + `openAI` (cloud `POST /v1/audio/speech`, WAV output) + `blueMagpie` (local `POST
+  /v1/tts`, WAV). `AppState.makeTTSService()` builds the selected `any TTSServiceProtocol`; the
+  Settings **TTS Provider** picker swaps providers and shows per-provider fields.
+  `AudioPlayerService` sniffs the RIFF/`WAVE` magic bytes to choose the temp-file extension, so
+  Apple/OpenAI/BlueMagpie WAV and MiniMax MP3 both decode through one `AVAudioFile` path. Adding a
+  provider = implement `TTSServiceProtocol` + add a case (mirrors the agent-backend seam).
+  - Voice matching for the zh-Hant persona spans **all Mandarin** (`zh-TW` *and* `zh-CN`) and
+    **excludes Cantonese** (`zh-HK`/`yue-*`): Apple ships premium/Siri Mandarin voices only as
+    `zh-CN` (e.g. 月/Yue), so a Taiwan user's only path to a high-quality voice is a Mainland
+    Mandarin one — it reads Traditional text fine. The dropdown tags each voice with its region.
+- **AppleTTSService** (`apple`): renders offline via `AVSpeechSynthesizer.write(_:toBufferCallback:)`
+  (which produces PCM buffers *without* playing), written out as WAV `Data` so lip-sync + `AudioQueue`
+  work unchanged. Voice = empty string means auto-pick the best installed voice for the current
+  `AppLanguage` (prefers `.premium`/`.enhanced`/`.compact` identifiers, so novelty voices like Bells
+  are excluded; Meijia is the zh-TW baseline). Emotion maps to a subtle `pitchMultiplier` only —
+  `AVSpeechUtterance` has no real emotional TTS. Compact voices sound robotic; Enhanced/Premium are a
+  one-time OS download in System Settings → Accessibility → Spoken Content → Manage Voices.
 
 ### VRM Character Rendering (three-vrm + WKWebView)
 
@@ -179,7 +191,8 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
 - **Character → VRM Model Filename** — file under `Resources/VRMModel/` to load (default
   `AliciaSolid.vrm`); changing it reloads the three-vrm scene live (via `loadModel` →
   `loadPendingModelIfPossible`, gated on `isWebViewReady`)
-- **Enable TTS Voice** + **TTS Provider** (`MiniMax` | `OpenAI` | `BlueMagpie`):
+- **Enable TTS Voice** + **TTS Provider** (`Apple (on-device)` default | `MiniMax` | `OpenAI` | `BlueMagpie`):
+  - Apple *(default)*: **Voice** (Auto / installed voices) + **Rate** — no key, no network
   - MiniMax: **API Key**, **Group ID**, **Voice ID**
   - OpenAI: **API Key**, **TTS Model**, **Voice**, **Voice Instructions**, **Speed**
   - BlueMagpie: **Server** URL (default `http://127.0.0.1:8765`) + **Inference Timesteps**
@@ -224,12 +237,14 @@ it answers from the model.
 - **Screen Recording permission resets on every rebuild**: ad-hoc "Sign to Run Locally" changes the code signature (cdhash) each build, and Screen Recording is a high-security TCC permission bound to the *signature* — so the grant drops on every rebuild (Mic/Speech survive because they key on the bundle id). Dev workaround: sign the dev build with a stable self-signed code-signing cert — see `CONTRIBUTING.md` → *Testing screen vision*.
 - **LaunchServices bundle-id collision**: if another build with the same bundle id is registered (a second checkout, an installed copy), `open <path>` can launch a stale copy that exits. `scripts/run-app.sh` runs `lsregister -f` on the freshly-built app before `open` to force the right one.
 - **Vision glance "stay silent" leaks as text**: told to "say nothing," models narrate their silence (`(nothing worth adding…)`) instead of returning empty. Fix: a `[silent]` sentinel in `Persona.visionGlanceTemplate` + `ConversationController.isSilentResponse` (also catches empty and a lone bracketed aside) to suppress the whole turn.
+- **`AVSpeechSynthesizer.write` needs a live run loop on the *calling* thread**: its buffer callbacks are delivered on the run loop of whatever thread called `write`. Calling it from a background `Task` (no run loop) hangs forever — the completion never fires. `AppleTTSService`/`AppleSpeechRenderer` issues the `write` from `DispatchQueue.main.async` (the main run loop is always live in a GUI app), then resumes its `CheckedContinuation` from the callback. Verified: without this, a CLI test that blocks the main thread never gets a callback; with a running run loop it produces a valid RIFF/WAVE WAV (22050 Hz mono). A zero-length terminal buffer signals end-of-utterance.
 
 ## Status
 
-Implemented: VRM rendering + spring bones, streaming chat via Hermes, pluggable TTS (MiniMax +
-OpenAI + local BlueMagpie) with lip sync, pluggable STT voice input (Apple on-device + Groq/OpenAI
-Whisper), opt-in **screen vision** (ScreenCaptureKit capture → multimodal model, with smart
+Implemented: VRM rendering + spring bones, streaming chat via Hermes, pluggable TTS (Apple
+on-device + MiniMax + OpenAI + local BlueMagpie) with lip sync, pluggable STT voice input (Apple
+on-device + Groq/OpenAI Whisper), opt-in **screen vision** (ScreenCaptureKit capture → multimodal
+model, with smart
 self-gating proactive glances), live streaming chat UI, 16 emotions, skeletal animation clips,
 proactive idle timer (60 min, or a shorter configurable interval when screen vision is on),
 configurable VRM model (Settings), desktop pet mode (non-activating transparent draggable overlay

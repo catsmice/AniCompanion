@@ -21,7 +21,7 @@ struct SettingsView: View {
     /// backend's entry the fields show; nothing is persisted until Save.
     @State private var endpoints: [ChatBackend: String] = [:]
     @State private var apiKeys: [ChatBackend: String] = [:]
-    @State private var ttsProvider: TTSProvider = .miniMax
+    @State private var ttsProvider: TTSProvider = .apple
     @State private var blueMagpieTTSEndpoint: String = "http://127.0.0.1:8765"
     @State private var blueMagpieInferenceTimesteps: Int = 5
     @State private var openAITTSAPIKey: String = ""
@@ -29,6 +29,8 @@ struct SettingsView: View {
     @State private var openAITTSVoice: String = OpenAITTSService.defaultVoice
     @State private var openAITTSInstructions: String = OpenAITTSService.defaultInstructions
     @State private var openAITTSSpeed: Double = 1.0
+    @State private var appleTTSVoiceIdentifier: String = AppleTTSService.autoVoiceIdentifier
+    @State private var appleTTSRate: Double = AppleTTSService.defaultRate
     @State private var ttsVoiceID: String = "Chinese (Mandarin)_Crisp_Girl"
     @State private var ttsEnabled: Bool = true
     @State private var sttProvider: STTProvider = .apple
@@ -175,6 +177,34 @@ struct SettingsView: View {
                             }
 
                             switch ttsProvider {
+                            case .apple:
+                                let voiceOptions = AppleTTSService.voiceOptions(for: language)
+
+                                SettingsField(label: "Voice") {
+                                    Picker("", selection: $appleTTSVoiceIdentifier) {
+                                        Text("Auto (best installed)").tag(AppleTTSService.autoVoiceIdentifier)
+                                        ForEach(voiceOptions) { voice in
+                                            Text(appleVoiceLabel(voice)).tag(voice.id)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .labelsHidden()
+                                }
+
+                                SettingsField(label: "Rate") {
+                                    HStack(spacing: 12) {
+                                        Slider(value: $appleTTSRate, in: 0.3...0.7, step: 0.01)
+                                        Text("\(appleTTSRate, specifier: "%.2f")")
+                                            .font(.system(size: 13, design: .monospaced))
+                                            .foregroundStyle(.white)
+                                            .frame(width: 48, alignment: .trailing)
+                                    }
+                                }
+
+                                Text("Runs fully on-device — no key, no network. For natural-sounding voices, download an Enhanced or Premium voice in System Settings → Accessibility → Spoken Content → Manage Voices.")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.white.opacity(0.4))
+                                    .fixedSize(horizontal: false, vertical: true)
                             case .miniMax:
                                 SettingsField(label: "MiniMax API Key") {
                                     SecureField("eyJ...", text: $minimaxAPIKey)
@@ -655,8 +685,20 @@ struct SettingsView: View {
         String(localized: "Hi, I'm Xiaoguang. This is a voice preview.")
     }
 
+    private func appleVoiceLabel(_ voice: AppleTTSService.VoiceOption) -> String {
+        let detail = voice.qualityLabel.isEmpty
+            ? voice.languageCode
+            : "\(voice.qualityLabel) · \(voice.languageCode)"
+        return "\(voice.name) (\(detail))"
+    }
+
     private func makePreviewTTSService() -> any TTSServiceProtocol {
         switch ttsProvider {
+        case .apple:
+            return AppleTTSService(
+                voiceIdentifier: appleTTSVoiceIdentifier,
+                rate: appleTTSRate
+            )
         case .miniMax:
             return TTSService(
                 apiKey: minimaxAPIKey,
@@ -734,7 +776,7 @@ struct SettingsView: View {
         }
         minimaxAPIKey = appState.minimaxAPIKey
         minimaxGroupID = appState.minimaxGroupID
-        ttsProvider = TTSProvider(rawValue: appState.ttsProvider) ?? .miniMax
+        ttsProvider = TTSProvider(rawValue: appState.ttsProvider) ?? .apple
         blueMagpieTTSEndpoint = appState.blueMagpieTTSEndpoint
         blueMagpieInferenceTimesteps = appState.blueMagpieInferenceTimesteps
         openAITTSAPIKey = appState.openAITTSAPIKey
@@ -742,6 +784,8 @@ struct SettingsView: View {
         openAITTSVoice = appState.openAITTSVoice
         openAITTSInstructions = appState.openAITTSInstructions
         openAITTSSpeed = appState.openAITTSSpeed
+        appleTTSVoiceIdentifier = appState.appleTTSVoiceIdentifier
+        appleTTSRate = appState.appleTTSRate
         ttsVoiceID = appState.ttsVoiceID
         ttsEnabled = appState.ttsEnabled
         sttProvider = STTProvider(rawValue: appState.sttProvider) ?? .apple
@@ -782,6 +826,8 @@ struct SettingsView: View {
         appState.openAITTSVoice = openAITTSVoice
         appState.openAITTSInstructions = openAITTSInstructions
         appState.openAITTSSpeed = openAITTSSpeed
+        appState.appleTTSVoiceIdentifier = appleTTSVoiceIdentifier
+        appState.appleTTSRate = appleTTSRate
         appState.ttsVoiceID = ttsVoiceID
         appState.ttsEnabled = ttsEnabled
         appState.sttProvider = sttProvider.rawValue

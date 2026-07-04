@@ -1,6 +1,7 @@
 import Foundation
 
 enum TTSProvider: String, CaseIterable, Identifiable, Sendable {
+    case apple
     case miniMax
     case blueMagpie
     case openAI
@@ -11,6 +12,7 @@ enum TTSProvider: String, CaseIterable, Identifiable, Sendable {
 
     var displayName: String {
         switch self {
+        case .apple: return "Apple (on-device)"
         case .miniMax: return "MiniMax"
         case .blueMagpie: return "BlueMagpie"
         case .openAI: return "OpenAI"
@@ -22,6 +24,6 @@ enum TTSProvider: String, CaseIterable, Identifiable, Sendable {
            let provider = TTSProvider(rawValue: raw) {
             return provider
         }
-        return .miniMax
+        return .apple
     }
 }
