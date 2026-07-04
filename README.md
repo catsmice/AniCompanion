@@ -60,6 +60,15 @@ end-to-end and runnable locally so your conversations stay on your machine.
   Settings (both the interface and the language 小光 speaks). Adding a language is easy — see
   [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
+## What's new in v0.4.0
+
+This release adds:
+
+- **👀 Screen vision** *(opt-in, off by default)* — let 小光 see what you're working on. She captures
+  your **focused window** (or the whole screen) and sends it to your model, so you can ask *"what's
+  this error?"* and she actually sees it. Turn it on in **Settings → Screen Vision** (a consent prompt
+  + macOS Screen Recording permission are required). Needs a **vision-capable model**.
+
 ## What's new in v0.3.0
 
 This release adds:
