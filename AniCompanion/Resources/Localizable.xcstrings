@@ -13,10 +13,10 @@
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%lld 分鐘" } }
       }
     },
-    "How often she glances at your screen while you're heads-down. She only speaks up if there's something worth mentioning." : {
+    "How often she glances at your screen while you're heads-down. A screenshot is sent to your model each glance — she only comments when there's something worth mentioning." : {
       "comment" : "Settings: glance interval hint",
       "localizations" : {
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "當你專心工作時，她多久看一次你的螢幕。只有在有值得一提的事情時她才會開口。" } }
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "當你專心工作時，她多久看一次你的螢幕。每次查看都會傳送一張螢幕截圖到你的模型——只有在有值得一提的事情時她才會開口。" } }
       }
     },
     "Screen Vision" : {

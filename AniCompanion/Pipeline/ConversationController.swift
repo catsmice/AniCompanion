@@ -131,6 +131,13 @@ final class ConversationController: ObservableObject {
     /// from Settings via `AppState`.
     var visionProactiveIntervalSeconds: TimeInterval = 300 // 5 minutes
 
+    /// Screen vision is "active" only when enabled AND Screen Recording permission is granted — i.e. a
+    /// frame will actually be captured + attached. Gates the glance prompt, the shorter interval, and
+    /// silent-suppression, so nothing behaves as a vision glance without a real screenshot.
+    private var visionActive: Bool {
+        screenVisionEnabled && (screenVisionService?.hasAccess ?? false)
+    }
+
     /// Whether the launch greeting has already been sent this session.
     private var hasGreetedOnLaunch: Bool = false
 
@@ -320,7 +327,10 @@ final class ConversationController: ObservableObject {
         // When vision is on, an unprompted proactive turn becomes a screen glance (she looks at the
         // attached screenshot and self-gates on whether it's worth saying anything); otherwise it's
         // the usual idle-task prompt.
-        let instruction = prompt ?? (screenVisionEnabled
+        // A vision glance only when this is an unprompted proactive turn AND vision is truly active
+        // (enabled + permitted), so the "screen is attached" prompt is never used without a frame.
+        let visionGlance = (prompt == nil) && visionActive
+        let instruction = prompt ?? (visionGlance
             ? buildVisionGlancePrompt(time: timeString)
             : buildIdleTaskPrompt(time: timeString))
 
@@ -331,7 +341,7 @@ final class ConversationController: ObservableObject {
             guard let self else { return }
 
             do {
-                try await self.runPipeline()
+                try await self.runPipeline(suppressSilentResponse: visionGlance)
             } catch is CancellationError {
                 // Cancellation is expected.
             } catch {
@@ -356,7 +366,7 @@ final class ConversationController: ObservableObject {
     private func startProactiveTimer() {
         proactiveTimer?.cancel()
         let timer = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
-        let interval = screenVisionEnabled ? visionProactiveIntervalSeconds : proactiveInterval
+        let interval = visionActive ? visionProactiveIntervalSeconds : proactiveInterval
         timer.schedule(deadline: .now() + interval)
         timer.setEventHandler { [weak self] in
             Task { @MainActor [weak self] in
@@ -585,7 +595,7 @@ final class ConversationController: ObservableObject {
     // MARK: - Pipeline
 
     /// The core pipeline: send chat via the transport -> parse sentences -> TTS in parallel -> play in order.
-    private func runPipeline() async throws {
+    private func runPipeline(suppressSilentResponse: Bool = false) async throws {
         let contextMessages = buildMessagesWithSystemPrompt()
         let apiMessages = contextMessages.map { $0.apiMessage }
 
@@ -643,10 +653,10 @@ final class ConversationController: ObservableObject {
 
         let rawResponse = await pipelineState.getRawResponse()
 
-        // Screen-vision "stay silent": on a glance the model is told to output a sentinel when
-        // nothing is worth saying. Suppress it entirely — no history, no speech, no bubble — so she
-        // just stays quiet. This is what makes the proactive glance feel smart rather than chatty.
-        if Self.isSilentResponse(rawResponse) {
+        // Screen-vision glance "stay silent": on a glance the model outputs a sentinel when nothing
+        // is worth saying. Suppress the whole turn — no history, speech, or bubble — so she stays
+        // quiet. Scoped to vision glances (never user turns) so it can't swallow a real reply.
+        if suppressSilentResponse, Self.isSilentResponse(rawResponse) {
             streamingText = ""
             isStreaming = false
             return
@@ -679,7 +689,7 @@ final class ConversationController: ObservableObject {
         do {
             var sentences: [SentenceChunk] = []
             for await sentence in parser.sentences {
-                Log.pipeline("[Pipeline] Parsed sentence: emotion=\(sentence.emotion.rawValue), text=\"\(sentence.text)\"")
+                Log.pipeline("[Pipeline] Parsed sentence: emotion=\(sentence.emotion.rawValue), \(sentence.text.count) chars")
                 sentences.append(sentence)
             }
 
@@ -710,7 +720,7 @@ final class ConversationController: ObservableObject {
                             charController?.setExpression(emotion, blendDuration: 0.3)
                         }
 
-                        Log.pipeline("[Pipeline] TTS[\(index)] synthesizing: \"\(sentence.text)\"")
+                        Log.pipeline("[Pipeline] TTS[\(index)] synthesizing \(sentence.text.count) chars")
                         var audioData = Data()
                         let ttsStream = ttsService.synthesize(
                             text: sentence.text,
@@ -859,9 +869,10 @@ final class ConversationController: ObservableObject {
     static func isSilentResponse(_ raw: String) -> Bool {
         let t = stripEmotionTags(from: raw).trimmingCharacters(in: .whitespacesAndNewlines)
         if t.isEmpty { return true }
-        if t.lowercased().contains("[silent]") { return true }
-        let pairs: [(Character, Character)] = [("(", ")"), ("（", "）"), ("[", "]"), ("［", "］"), ("「", "」")]
-        if let f = t.first, let l = t.last, pairs.contains(where: { $0.0 == f && $0.1 == l }) {
+        if t.lowercased() == "[silent]" { return true }
+        // A lone parenthetical aside — the model narrating its silence instead of using the sentinel.
+        // Parentheses only: quotes/brackets can wrap a legitimate short reply (e.g. 「好耶！」).
+        if let f = t.first, let l = t.last, (f == "(" && l == ")") || (f == "（" && l == "）") {
             return true
         }
         return false

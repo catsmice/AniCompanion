@@ -476,7 +476,7 @@ struct SettingsView: View {
                                     .labelsHidden()
                                 }
 
-                                Text("How often she glances at your screen while you're heads-down. She only speaks up if there's something worth mentioning.")
+                                Text("How often she glances at your screen while you're heads-down. A screenshot is sent to your model each glance — she only comments when there's something worth mentioning.")
                                     .font(.system(size: 11))
                                     .foregroundStyle(.white.opacity(0.4))
                                     .fixedSize(horizontal: false, vertical: true)

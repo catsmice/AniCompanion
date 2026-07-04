@@ -60,8 +60,8 @@ enum ScreenVisionError: LocalizedError {
 
 /// Captures what the user is working on so 小光 can "see the screen."
 ///
-/// Design (see `docs/notes/open-llm-vtuber-study.md`): capture is **on-demand per turn**, never a
-/// continuous stream — the caller asks for a single frame when she's about to speak. Two scopes:
+/// Design: capture is **on-demand per turn**, never a continuous stream — the caller asks for a
+/// single frame when she's about to speak. Two scopes:
 /// the frontmost window of the user's active app (default) or the whole display. In both cases
 /// **AniCompanion's own windows are excluded** so she never captures herself.
 ///
