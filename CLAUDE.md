@@ -151,14 +151,24 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
   (multipart) to a Whisper endpoint. Uses its own non-`@MainActor` `WhisperAudioCapture` for the tap
   (same Swift-6 fix as `STTAudioCapture`); auto-stops on silence via an RMS-driven Timer.
 - Auto-stop on 2s silence via Timer
-- **Hands-free mode** (`ConversationController.setHandsFree` + `voice_hands_free_enabled`): opt-in
+- **Hands-free mode** (`ConversationController.configureVoiceMode` + `voice_hands_free_enabled`): opt-in
   continuous-listen loop (Settings → Speech Input). A generation-tokened background task re-arms the mic
   after every turn (`listenOnceAndRespond` → `sendMessage` awaits the full pipeline → re-arm), so the
   user talks hands-free. **Half-duplex** — the loop opens the mic *only while idle* (guards on
   `isProcessing || isSpeaking || isListening`), never during her own TTS, so she can't capture herself
-  (no AEC needed). Voice barge-in *mid-speech* still uses the mic button (`startVoiceInput` →
-  `cancelInternal`). A fatal STT error stops the loop (no spin); benign no-speech/cancellation just
-  re-arm. Full-duplex talk-over-her (VPIO AEC) is a deferred Phase 2.
+  (no AEC needed). Voice barge-in *mid-speech* uses the mic button (`startVoiceInput` → `cancelInternal`)
+  — or full-duplex (below). A fatal STT error stops the loop (no spin); benign no-speech/cancellation
+  just re-arm.
+- **Full-duplex voice barge-in** (`FullDuplexVoiceService` + `voice_full_duplex_enabled`, a sub-option
+  of hands-free): the user can talk *over* her. `configureVoiceMode(handsFree:fullDuplex:)` picks the
+  mode; `handsFree && fullDuplex` runs the full-duplex service **instead of** the half-duplex loop.
+  One shared **Voice-Processing I/O (VPIO)** `AVAudioEngine` both plays her TTS (replacing
+  `AudioPlayerService`; `runTTSPlayback` routes to `fdService.play`, lip-sync observes its
+  `$currentAmplitude`) **and** taps the mic — echo-cancelled by VPIO. An **RMS gate** on the mic tap
+  fires barge-in (`stopPlayback` + `onBargeIn`→`cancelInternal`); a **continuous `SFSpeechRecognizer`**
+  (results ignored while `isSpeaking`, so her residual can't self-transcribe) captures the interrupting
+  words and delivers them via `onUserUtterance`→`sendMessage`. Trades a slightly AGC-flattened voice
+  (VPIO output processing — user-audited as acceptable) for talk-over. See the VPIO gotchas below.
 
 ### Screen Vision (opt-in, off by default)
 
@@ -208,6 +218,8 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
   - BlueMagpie: **Server** URL (default `http://127.0.0.1:8765`) + **Inference Timesteps**
 - **Speech Input → Hands-free mode** *(off by default)* — continuous listening: the mic auto re-arms
   after each reply so you just talk (half-duplex; interrupt mid-speech with the mic button)
+  - **↳ Let me interrupt her by voice** *(sub-option, off by default)* — full-duplex VPIO barge-in:
+    talk over her and she stops to listen (echo cancellation slightly flattens her voice)
 - **Speech Input → STT Provider** (`Apple` | `Groq` | `OpenAI` | `OpenAI-compatible`):
   - Apple: on-device, no key
   - Groq / OpenAI / OpenAI-compatible: **Endpoint**, **API Key**, **Model** (Whisper)
@@ -250,12 +262,14 @@ it answers from the model.
 - **LaunchServices bundle-id collision**: if another build with the same bundle id is registered (a second checkout, an installed copy), `open <path>` can launch a stale copy that exits. `scripts/run-app.sh` runs `lsregister -f` on the freshly-built app before `open` to force the right one.
 - **Vision glance "stay silent" leaks as text**: told to "say nothing," models narrate their silence (`(nothing worth adding…)`) instead of returning empty. Fix: a `[silent]` sentinel in `Persona.visionGlanceTemplate` + `ConversationController.isSilentResponse` (also catches empty and a lone bracketed aside) to suppress the whole turn.
 - **`AVSpeechSynthesizer.write` needs a live run loop on the *calling* thread**: its buffer callbacks are delivered on the run loop of whatever thread called `write`. Calling it from a background `Task` (no run loop) hangs forever — the completion never fires. `AppleTTSService`/`AppleSpeechRenderer` issues the `write` from `DispatchQueue.main.async` (the main run loop is always live in a GUI app), then resumes its `CheckedContinuation` from the callback. Verified: without this, a CLI test that blocks the main thread never gets a callback; with a running run loop it produces a valid RIFF/WAVE WAV (22050 Hz mono). A zero-length terminal buffer signals end-of-utterance.
+- **VPIO acoustic echo cancellation (full-duplex) — four hard-won constraints** (`FullDuplexVoiceService`): (1) **AEC needs one engine**: VPIO's echo canceller references *the same engine's output*, so TTS playback and the mic tap MUST share one `AVAudioEngine` with `inputNode.setVoiceProcessingEnabled(true)` — there's no API to feed a reference from a separate engine. (2) **Format-pin to the VPIO rate**: enabling VPIO forces a 48 kHz hardware rate; the mixer defaults to 44.1 kHz and `engine.start()` then fails with **-10875**. Fix: connect mixer→output *and* player→mixer explicitly at `outputNode.inputFormat` (48 kHz). (3) **The VPIO input node is MULTI-CHANNEL** (9ch mic-array here). Appending that raw buffer to `SFSpeechRecognizer` yields a permanent **err 1110 "no speech detected"** — it needs mono. Extract channel 0 (the echo-cancelled voice channel) into a fresh mono buffer before `request.append`. This was the root cause of "barge-in stops her but no text." (4) **Feed recognition continuously, ignore results while speaking**: stop-during-speech loses the barge-in's opening words (user has to repeat); a restart-on-`isFinal` loop *thrashes*. Keep one recognizer alive, append audio always, and gate result *acceptance* on `!isSpeaking` — the interrupting words are already buffered and surface the instant the RMS gate flips `isSpeaking` false. **Calibration** (logged on-device): her voice post-AEC floors at ~0.003 RMS, the user's voice hits 0.16–0.25 → `bargeInRMSThreshold = 0.05` with wide margin.
 
 ## Status
 
 Implemented: VRM rendering + spring bones, streaming chat via Hermes, pluggable TTS (Apple
 on-device + MiniMax + OpenAI + local BlueMagpie) with lip sync, pluggable STT voice input (Apple
-on-device + Groq/OpenAI Whisper), opt-in **hands-free mode** (continuous-listen loop, half-duplex),
+on-device + Groq/OpenAI Whisper), opt-in **hands-free mode** (half-duplex continuous-listen loop) with
+an opt-in **full-duplex** sub-mode (VPIO echo-cancelled voice barge-in — talk over her),
 opt-in **screen vision** (ScreenCaptureKit capture → multimodal
 model, with smart
 self-gating proactive glances), live streaming chat UI, 16 emotions, skeletal animation clips,
@@ -264,7 +278,4 @@ configurable VRM model (Settings), desktop pet mode (non-activating transparent 
 with resize + speech bubble).
 
 Not yet done / deferred:
-- Full-duplex voice barge-in (Phase 2): talk over her by voice via VPIO acoustic-echo-cancellation
-  (`setVoiceProcessingEnabled`) — needs unifying the mic + playback audio engines. Today's hands-free
-  is half-duplex (interrupt mid-speech via the mic button).
 - Cron-scheduled proactive push (needs polling Hermes' jobs API or a delivery adapter)

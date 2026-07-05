@@ -83,6 +83,10 @@ final class AppState: ObservableObject {
     /// Hands-free voice mode: continuously re-arm the mic after each turn (half-duplex).
     @AppStorage("voice_hands_free_enabled") var voiceHandsFreeEnabled: Bool = false
 
+    /// Full-duplex (voice barge-in) — a sub-option of hands-free that routes audio through a
+    /// voice-processing (VPIO) engine so the user can talk over her. Slightly alters her voice.
+    @AppStorage("voice_full_duplex_enabled") var voiceFullDuplexEnabled: Bool = false
+
     /// VRM model filename under Resources/VRMModel.
     @AppStorage("vrm_model_filename") var vrmModelFilename: String = "AliciaSolid.vrm"
 
@@ -207,7 +211,7 @@ final class AppState: ObservableObject {
         controller.ttsEnabled = ttsEnabled
         controller.screenVisionEnabled = screenVisionEnabled
         controller.visionProactiveIntervalSeconds = Double(visionProactiveIntervalMinutes * 60)
-        controller.setHandsFree(voiceHandsFreeEnabled)
+        controller.configureVoiceMode(handsFree: voiceHandsFreeEnabled, fullDuplex: voiceFullDuplexEnabled)
         conversationController = controller
 
         // Verify gateway reachability (HTTP health check).
@@ -280,6 +284,10 @@ final class AppState: ObservableObject {
     /// Call this after the user saves updated API keys or model preferences
     /// in SettingsView so the new values take effect immediately.
     func reinitializeServices() {
+        // Fully tear down voice mode on the outgoing controller so its VPIO engine releases the
+        // mic before a new controller spins one up (two VPIO engines would fight over the input).
+        conversationController?.configureVoiceMode(handsFree: false, fullDuplex: false)
+
         // Cancel any ongoing conversation processing.
         conversationController?.cancel()
 

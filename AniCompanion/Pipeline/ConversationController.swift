@@ -156,6 +156,14 @@ final class ConversationController: ObservableObject {
     /// Invalidation token so a stale loop exits when hands-free is toggled off/on.
     private var handsFreeGeneration: UInt64 = 0
 
+    /// Full-duplex voice service (VPIO): plays TTS + listens simultaneously with echo cancellation,
+    /// enabling voice barge-in. Non-nil only while full-duplex mode is active. When active it
+    /// supersedes both the AudioPlayerService playback path and the half-duplex hands-free loop.
+    private var fullDuplexService: FullDuplexVoiceService?
+
+    /// Whether full-duplex mode is currently active (service running).
+    private var fullDuplexActive: Bool { fullDuplexService != nil }
+
     // MARK: - Initialization
 
     /// Creates a new conversation controller with all required dependencies.
@@ -297,19 +305,57 @@ final class ConversationController: ObservableObject {
 
     // MARK: - Hands-Free Voice Loop
 
-    /// Turn hands-free (continuous listening) voice mode on or off. Idempotent.
-    ///
-    /// When on, a background loop re-arms the mic after each turn so the user can talk
-    /// without touching the mic button. Half-duplex: the loop opens the mic only while idle
-    /// (not while she is processing or speaking), so she never captures her own TTS.
-    func setHandsFree(_ enabled: Bool) {
-        guard enabled != handsFreeEnabled else { return }
-        handsFreeEnabled = enabled
-        if enabled {
-            startHandsFreeLoop()
+    /// Configure voice mode from the two settings. Full-duplex is a sub-option of hands-free:
+    /// - hands-free off → neither (push-to-talk only)
+    /// - hands-free on, full-duplex off → half-duplex continuous loop (mic idle-only, no echo)
+    /// - hands-free on, full-duplex on → VPIO full-duplex (talk over her; echo-cancelled)
+    func configureVoiceMode(handsFree: Bool, fullDuplex: Bool) {
+        handsFreeEnabled = handsFree
+        let wantFullDuplex = handsFree && fullDuplex
+
+        if wantFullDuplex {
+            stopHandsFreeLoop()      // the half-duplex loop and full-duplex are mutually exclusive
+            startFullDuplex()
         } else {
-            stopHandsFreeLoop()
+            stopFullDuplex()
+            if handsFree { startHandsFreeLoop() } else { stopHandsFreeLoop() }
         }
+    }
+
+    // MARK: - Full-Duplex (VPIO barge-in)
+
+    private func startFullDuplex() {
+        guard fullDuplexService == nil else { return }
+        let service = FullDuplexVoiceService(
+            locale: Locale(identifier: AppLanguage.current.sttLocaleIdentifier)
+        )
+        service.onBargeIn = { [weak self] in
+            // User interrupted her — cancel the in-flight pipeline (her voice already stopped).
+            self?.cancelInternal()
+        }
+        service.onUserUtterance = { [weak self] text in
+            Task { @MainActor in await self?.sendMessage(text) }
+        }
+        fullDuplexService = service
+        startLipSyncObservation() // re-point lip-sync at the full-duplex amplitude source
+
+        Task { @MainActor [weak self] in
+            do {
+                try await service.start()
+            } catch {
+                guard let self else { return }
+                Log.pipeline("[Pipeline] Full-duplex start failed: \(error)")
+                self.lastError = error
+                self.stopFullDuplex()
+            }
+        }
+    }
+
+    private func stopFullDuplex() {
+        guard let service = fullDuplexService else { return }
+        service.stop()
+        fullDuplexService = nil
+        startLipSyncObservation() // re-point lip-sync back at the AudioPlayerService source
     }
 
     private func startHandsFreeLoop() {
@@ -845,9 +891,11 @@ final class ConversationController: ObservableObject {
                     Log.pipeline("[Pipeline] TTS producer finished")
                 }
 
-                // Audio consumer.
+                // Audio consumer. Route through the full-duplex service when active (so she keeps
+                // listening + can be barged-in), otherwise the standard AudioPlayerService.
                 let audioPlayerRef = audioPlayer
-                group.addTask { @Sendable [charController, capturedSentences] in
+                let fdService = fullDuplexService
+                group.addTask { @Sendable [charController, capturedSentences, fdService] in
                     Log.pipeline("[Pipeline] Audio consumer started")
                     await MainActor.run {
                         self.isSpeaking = true
@@ -860,7 +908,11 @@ final class ConversationController: ObservableObject {
                             let raw = capturedSentences[segment.sequence].text
                             await MainActor.run { charController?.setSpeechText(Self.stripEmotionTags(from: raw)) }
                         }
-                        try await audioPlayerRef.playAudioData(segment.data)
+                        if let fdService {
+                            try await fdService.play(segment.data)
+                        } else {
+                            try await audioPlayerRef.playAudioData(segment.data)
+                        }
                     }
                     Log.pipeline("[Pipeline] Audio consumer finished")
                     await MainActor.run {
@@ -882,9 +934,14 @@ final class ConversationController: ObservableObject {
     // MARK: - Lip Sync
 
     private func startLipSyncObservation() {
-        guard amplitudeCancellable == nil else { return }
+        // Drive lip-sync from whichever component is actually producing audio: the full-duplex
+        // service when active, otherwise the standard AudioPlayerService. Re-subscribe on switch.
+        amplitudeCancellable?.cancel()
 
-        amplitudeCancellable = audioPlayer.$currentAmplitude
+        let publisher = fullDuplexService?.$currentAmplitude.eraseToAnyPublisher()
+            ?? audioPlayer.$currentAmplitude.eraseToAnyPublisher()
+
+        amplitudeCancellable = publisher
             .receive(on: RunLoop.main)
             .sink { [weak self] amplitude in
                 self?.characterController?.setMouthOpen(amplitude)
@@ -928,6 +985,7 @@ final class ConversationController: ObservableObject {
         proactiveTimer = nil
 
         audioPlayer.stop()
+        fullDuplexService?.stopPlayback() // stop her voice, but keep the VPIO engine/recognition alive
         stopLipSyncObservation()
 
         if isListening {

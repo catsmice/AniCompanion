@@ -44,6 +44,7 @@ struct SettingsView: View {
     @State private var sttAPIKeyCompatible: String = ""
     @State private var sttModelCompatible: String = "whisper-1"
     @State private var voiceHandsFreeEnabled: Bool = false
+    @State private var voiceFullDuplexEnabled: Bool = false
     @State private var language: AppLanguage = .english
     @State private var vrmModelFilename: String = "AliciaSolid.vrm"
 
@@ -395,10 +396,22 @@ struct SettingsView: View {
                             Toggle("Hands-free mode", isOn: $voiceHandsFreeEnabled)
                                 .toggleStyle(.switch)
 
-                            Text("Keep listening and reply automatically — just talk, no need to click the mic each time. She listens only while idle, so you take turns; to cut her off mid-sentence, click the mic button.")
+                            Text("Keep listening and reply automatically — just talk, no need to click the mic each time.")
                                 .font(.system(size: 11))
                                 .foregroundStyle(.white.opacity(0.4))
                                 .fixedSize(horizontal: false, vertical: true)
+
+                            if voiceHandsFreeEnabled {
+                                Toggle("Let me interrupt her by voice", isOn: $voiceFullDuplexEnabled)
+                                    .toggleStyle(.switch)
+                                    .padding(.leading, 16)
+
+                                Text("Full-duplex: talk over her and she'll stop to listen (uses echo cancellation, which slightly changes her voice). Off: you take turns and interrupt with the mic button.")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.white.opacity(0.4))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(.leading, 16)
+                            }
 
                             Divider().background(Color.white.opacity(0.08))
 
@@ -810,6 +823,7 @@ struct SettingsView: View {
         sttAPIKeyCompatible = appState.sttAPIKeyCompatible
         sttModelCompatible = appState.sttModelCompatible
         voiceHandsFreeEnabled = appState.voiceHandsFreeEnabled
+        voiceFullDuplexEnabled = appState.voiceFullDuplexEnabled
         language = AppLanguage.current
         vrmModelFilename = appState.vrmModelFilename
         screenVisionEnabled = appState.screenVisionEnabled
@@ -853,6 +867,7 @@ struct SettingsView: View {
         appState.sttAPIKeyCompatible = sttAPIKeyCompatible
         appState.sttModelCompatible = sttModelCompatible
         appState.voiceHandsFreeEnabled = voiceHandsFreeEnabled
+        appState.voiceFullDuplexEnabled = voiceFullDuplexEnabled
         appState.vrmModelFilename = vrmModelFilename
         appState.screenVisionEnabled = screenVisionEnabled
         appState.screenVisionScope = screenVisionScope.rawValue
