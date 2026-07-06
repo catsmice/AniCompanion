@@ -160,15 +160,26 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
   — or full-duplex (below). A fatal STT error stops the loop (no spin); benign no-speech/cancellation
   just re-arm.
 - **Full-duplex voice barge-in** (`FullDuplexVoiceService` + `voice_full_duplex_enabled`, a sub-option
-  of hands-free): the user can talk *over* her. `configureVoiceMode(handsFree:fullDuplex:)` picks the
-  mode; `handsFree && fullDuplex` runs the full-duplex service **instead of** the half-duplex loop.
-  One shared **Voice-Processing I/O (VPIO)** `AVAudioEngine` both plays her TTS (replacing
-  `AudioPlayerService`; `runTTSPlayback` routes to `fdService.play`, lip-sync observes its
-  `$currentAmplitude`) **and** taps the mic — echo-cancelled by VPIO. An **RMS gate** on the mic tap
-  fires barge-in (`stopPlayback` + `onBargeIn`→`cancelInternal`); a **continuous `SFSpeechRecognizer`**
-  (results ignored while `isSpeaking`, so her residual can't self-transcribe) captures the interrupting
-  words and delivers them via `onUserUtterance`→`sendMessage`. Trades a slightly AGC-flattened voice
-  (VPIO output processing — user-audited as acceptable) for talk-over. See the VPIO gotchas below.
+  of hands-free): the user can talk *over* her. It uses one shared **Voice-Processing I/O (VPIO)**
+  `AVAudioEngine` that both plays her TTS (replacing `AudioPlayerService`; `runTTSPlayback` routes to
+  `fdService.play`, lip-sync observes its `$currentAmplitude`) **and** taps the mic — echo-cancelled by
+  VPIO. An **RMS gate** on the mic tap fires barge-in (`stopPlayback` + `onBargeIn`→`cancelInternal`);
+  a **continuous `SFSpeechRecognizer`** (results ignored while `isSpeaking`, so her residual can't
+  self-transcribe) captures the interrupting words → `onUserUtterance`→`sendMessage`.
+  - **Lazy VPIO** (important): VPIO puts the audio device into communication mode, which *ducks other
+    apps' audio* (YouTube goes silent) and holds the mic. So it runs **only while she's actually
+    speaking a turn**, not all session: `configureVoiceMode` keeps the half-duplex loop for *idle*
+    listening (no ducking, mic free), `runTTSPlayback` calls `ensureFullDuplexEngine()` (awaited) to
+    bring VPIO up for the spoken turn, and `cleanupPipeline` calls `scheduleFullDuplexStop()` — a
+    debounce that tears VPIO down when idle (it waits on `isCapturingUtterance` so a barge-in's
+    recognition isn't cut off, and stays warm across chained turns). Net: other audio ducks *only
+    during her responses*, and the hands-free loop guards on `fullDuplexService != nil` so STT and
+    VPIO never fight over the mic.
+  - **Why not software AEC** (tried + reverted): a speexdsp echo canceller on a plain engine avoids
+    ducking entirely, but needs the mic + playback reference *sample-synchronized*; two independent
+    `AVAudioEngine` taps drift (jittery timing + separate mic/speaker clocks) so the canceller can't
+    lock → she self-transcribes. Sample-sync is the classic hard AEC problem VPIO solves in hardware.
+    See [[anicompanion-vpio-fullduplex]] in memory.
 
 ### Screen Vision (opt-in, off by default)
 
@@ -218,8 +229,9 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
   - BlueMagpie: **Server** URL (default `http://127.0.0.1:8765`) + **Inference Timesteps**
 - **Speech Input → Hands-free mode** *(off by default)* — continuous listening: the mic auto re-arms
   after each reply so you just talk (half-duplex; interrupt mid-speech with the mic button)
-  - **↳ Let me interrupt her by voice** *(sub-option, off by default)* — full-duplex VPIO barge-in:
-    talk over her and she stops to listen (echo cancellation slightly flattens her voice)
+  - **↳ Let me interrupt her by voice** *(sub-option, off by default)* — lazy-VPIO full-duplex barge-in:
+    talk over her and she stops to listen. VPIO (echo cancellation) runs only while she's speaking, so
+    other apps' audio is ducked *only during her responses*, not the whole session.
 - **Speech Input → STT Provider** (`Apple` | `Groq` | `OpenAI` | `OpenAI-compatible`):
   - Apple: on-device, no key
   - Groq / OpenAI / OpenAI-compatible: **Endpoint**, **API Key**, **Model** (Whisper)
@@ -269,7 +281,8 @@ it answers from the model.
 Implemented: VRM rendering + spring bones, streaming chat via Hermes, pluggable TTS (Apple
 on-device + MiniMax + OpenAI + local BlueMagpie) with lip sync, pluggable STT voice input (Apple
 on-device + Groq/OpenAI Whisper), opt-in **hands-free mode** (half-duplex continuous-listen loop) with
-an opt-in **full-duplex** sub-mode (VPIO echo-cancelled voice barge-in — talk over her),
+an opt-in **full-duplex** sub-mode (lazy-VPIO echo-cancelled voice barge-in — talk over her; VPIO runs
+only while she speaks so other audio ducks just during her responses),
 opt-in **screen vision** (ScreenCaptureKit capture → multimodal
 model, with smart
 self-gating proactive glances), live streaming chat UI, 16 emotions, skeletal animation clips,

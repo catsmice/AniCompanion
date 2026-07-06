@@ -156,13 +156,19 @@ final class ConversationController: ObservableObject {
     /// Invalidation token so a stale loop exits when hands-free is toggled off/on.
     private var handsFreeGeneration: UInt64 = 0
 
-    /// Full-duplex voice service (VPIO): plays TTS + listens simultaneously with echo cancellation,
-    /// enabling voice barge-in. Non-nil only while full-duplex mode is active. When active it
-    /// supersedes both the AudioPlayerService playback path and the half-duplex hands-free loop.
+    /// Whether full-duplex (VPIO voice barge-in) is enabled in Settings (a sub-option of hands-free).
+    /// The VPIO engine runs **lazily** — only while she's actually speaking a turn (see
+    /// `fullDuplexService`) — because VPIO puts the audio device into communication mode, which ducks
+    /// other apps' audio. Idle listening stays on the half-duplex loop, so nothing is ducked (and the
+    /// mic isn't held) while she's quiet; ducking is limited to her spoken responses.
+    private(set) var fullDuplexEnabled: Bool = false
+
+    /// The VPIO full-duplex service. Non-nil only while the VPIO engine is up (during her speech +
+    /// a short debounce). While up it routes TTS playback + lip-sync and captures voice barge-in.
     private var fullDuplexService: FullDuplexVoiceService?
 
-    /// Whether full-duplex mode is currently active (service running).
-    private var fullDuplexActive: Bool { fullDuplexService != nil }
+    /// Debounces tearing the VPIO engine down after a turn, so chained turns / barge-ins keep it warm.
+    private var fullDuplexStopTask: Task<Void, Never>?
 
     // MARK: - Initialization
 
@@ -255,6 +261,8 @@ final class ConversationController: ObservableObject {
         stopLipSyncObservation()
         characterController?.setMouthOpen(0)
         resetProactiveTimer()
+        // Lazy VPIO: the turn is done — release the engine (debounced) so the mic frees + audio un-ducks.
+        if fullDuplexEnabled { scheduleFullDuplexStop() }
     }
 
     /// Start voice input via the STT service.
@@ -306,26 +314,33 @@ final class ConversationController: ObservableObject {
     // MARK: - Hands-Free Voice Loop
 
     /// Configure voice mode from the two settings. Full-duplex is a sub-option of hands-free:
-    /// - hands-free off → neither (push-to-talk only)
-    /// - hands-free on, full-duplex off → half-duplex continuous loop (mic idle-only, no echo)
-    /// - hands-free on, full-duplex on → VPIO full-duplex (talk over her; echo-cancelled)
+    /// - hands-free off → push-to-talk only
+    /// - hands-free on → half-duplex continuous loop (idle listening, no ducking) for BOTH modes
+    /// - hands-free on + full-duplex on → additionally spin up VPIO *lazily* while she speaks, so
+    ///   the user can talk over her (barge-in). VPIO is torn down when idle so it only ducks other
+    ///   apps' audio during her spoken responses, not the whole session.
     func configureVoiceMode(handsFree: Bool, fullDuplex: Bool) {
         handsFreeEnabled = handsFree
-        let wantFullDuplex = handsFree && fullDuplex
+        fullDuplexEnabled = handsFree && fullDuplex
 
-        if wantFullDuplex {
-            stopHandsFreeLoop()      // the half-duplex loop and full-duplex are mutually exclusive
-            startFullDuplex()
-        } else {
-            stopFullDuplex()
-            if handsFree { startHandsFreeLoop() } else { stopHandsFreeLoop() }
-        }
+        // If full-duplex was just turned off, release the VPIO engine now.
+        if !fullDuplexEnabled { stopFullDuplexEngine() }
+
+        if handsFree { startHandsFreeLoop() } else { stopHandsFreeLoop() }
     }
 
-    // MARK: - Full-Duplex (VPIO barge-in)
+    // MARK: - Full-Duplex (lazy VPIO barge-in)
 
-    private func startFullDuplex() {
-        guard fullDuplexService == nil else { return }
+    /// Bring the VPIO engine up for the duration of a spoken turn (idempotent). Awaited before
+    /// playback so her first segment isn't dropped, and cancels any pending debounced stop so
+    /// chained turns / barge-ins keep it warm.
+    private func ensureFullDuplexEngine() async {
+        fullDuplexStopTask?.cancel(); fullDuplexStopTask = nil
+        guard fullDuplexEnabled, fullDuplexService == nil else { return }
+
+        // The half-duplex loop must not open the mic while VPIO owns it — stop its current listen.
+        if isListening { sttService?.stopListening(); isListening = false }
+
         let service = FullDuplexVoiceService(
             locale: Locale(identifier: AppLanguage.current.sttLocaleIdentifier)
         )
@@ -336,22 +351,37 @@ final class ConversationController: ObservableObject {
         service.onUserUtterance = { [weak self] text in
             Task { @MainActor in await self?.sendMessage(text) }
         }
-        fullDuplexService = service
-        startLipSyncObservation() // re-point lip-sync at the full-duplex amplitude source
+        do {
+            try await service.start()
+            fullDuplexService = service
+            startLipSyncObservation() // re-point lip-sync at the full-duplex amplitude source
+        } catch {
+            Log.pipeline("[Pipeline] Full-duplex start failed: \(error)")
+            lastError = error
+            service.stop()
+        }
+    }
 
-        Task { @MainActor [weak self] in
-            do {
-                try await service.start()
-            } catch {
-                guard let self else { return }
-                Log.pipeline("[Pipeline] Full-duplex start failed: \(error)")
-                self.lastError = error
-                self.stopFullDuplex()
+    /// Schedule tearing the VPIO engine down after a short debounce (so a follow-up turn or a
+    /// barge-in keeps it warm). Once down, the mic is released and other apps' audio un-ducks.
+    private func scheduleFullDuplexStop() {
+        guard fullDuplexService != nil else { return }
+        fullDuplexStopTask?.cancel()
+        fullDuplexStopTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(700))
+            guard let self, !Task.isCancelled else { return }
+            // Keep the engine up while a turn is active OR the mic is mid-capturing a barge-in
+            // utterance (tearing down would drop its recognition); otherwise release it.
+            if self.isProcessing || self.isSpeaking || (self.fullDuplexService?.isCapturingUtterance ?? false) {
+                self.scheduleFullDuplexStop() // re-check later
+            } else {
+                self.stopFullDuplexEngine()
             }
         }
     }
 
-    private func stopFullDuplex() {
+    private func stopFullDuplexEngine() {
+        fullDuplexStopTask?.cancel(); fullDuplexStopTask = nil
         guard let service = fullDuplexService else { return }
         service.stop()
         fullDuplexService = nil
@@ -373,8 +403,9 @@ final class ConversationController: ObservableObject {
                       self.handsFreeGeneration == generation,
                       !Task.isCancelled else { break }
 
-                // Half-duplex: only open the mic while fully idle, never during her own turn.
-                if self.isProcessing || self.isSpeaking || self.isListening {
+                // Only open the mic while fully idle — never during her own turn, and never while
+                // the lazy VPIO engine is up (it owns the mic during her full-duplex speech).
+                if self.isProcessing || self.isSpeaking || self.isListening || self.fullDuplexService != nil {
                     try? await Task.sleep(for: .milliseconds(250))
                     continue
                 }
@@ -855,6 +886,10 @@ final class ConversationController: ObservableObject {
             }
 
             charController?.playAnimation(named: "talk_gesture")
+
+            // Lazy VPIO: she's about to speak — bring the full-duplex engine up (awaited, so her
+            // first segment plays through it and barge-in is armed). Torn down after the turn.
+            if fullDuplexEnabled { await ensureFullDuplexEngine() }
 
             Log.pipeline("[Pipeline] Starting TTS for \(sentences.count) sentences")
             let capturedSentences = sentences

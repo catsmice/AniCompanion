@@ -26,6 +26,12 @@ final class FullDuplexVoiceService: ObservableObject {
     @Published private(set) var currentAmplitude: Float = 0
     @Published private(set) var isSpeaking: Bool = false
 
+    /// Whether the mic is mid-capturing a user utterance (a partial is buffered or the silence
+    /// timer is running). Lazy-VPIO teardown must wait for this so a barge-in isn't cut off.
+    var isCapturingUtterance: Bool {
+        silenceTimer != nil || !currentUtterance.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     // MARK: Callbacks (set by ConversationController)
 
     /// Fired the instant user speech interrupts playback — cancel the whole in-flight pipeline.
