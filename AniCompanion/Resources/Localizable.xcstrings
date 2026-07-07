@@ -1,6 +1,108 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "No display found to capture audio from." : {
+      "comment" : "Live captions: SCK error",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "找不到可擷取音訊的顯示器。" } }
+      }
+    },
+    "System audio capture failed: %@" : {
+      "comment" : "Live captions: SCK error",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "系統音訊擷取失敗：%@" } }
+      }
+    },
+    "Live transcription doesn't support %@ on this Mac." : {
+      "comment" : "Live captions: engine error",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "這台 Mac 的即時轉錄不支援 %@。" } }
+      }
+    },
+    "The speech recognizer is unavailable right now." : {
+      "comment" : "Live captions: engine error",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "語音辨識器目前無法使用。" } }
+      }
+    },
+    "Listening to your Mac's audio" : {
+      "comment" : "Live captions: overlay indicator",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "正在聆聽 Mac 播放的聲音" } }
+      }
+    },
+    "Downloading speech model… %lld%%" : {
+      "comment" : "Live captions: overlay while model downloads",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "正在下載語音模型… %lld%%" } }
+      }
+    },
+    "Live Transcription" : {
+      "comment" : "Settings: live transcription section title",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "即時轉錄" } }
+      }
+    },
+    "Live captions of your Mac's audio" : {
+      "comment" : "Settings: live transcription toggle",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "為 Mac 播放的聲音顯示即時字幕" } }
+      }
+    },
+    "Off by default. When on, 小光 listens to the audio playing on your Mac (a video, a meeting) and shows live captions — in her speech bubble in pet mode, or under the character here. Display-only; nothing is spoken." : {
+      "comment" : "Settings: live transcription hint",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "預設關閉。開啟後，小光會聆聽 Mac 正在播放的聲音（影片、會議），並顯示即時字幕——桌寵模式顯示在她的對話泡泡，一般模式顯示在角色下方。僅顯示文字，不會朗讀。" } }
+      }
+    },
+    "Source language" : {
+      "comment" : "Settings: live transcription source language",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "來源語言" } }
+      }
+    },
+    "Listen to your Mac's audio?" : {
+      "comment" : "Settings: live transcription consent alert title",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "要聆聽 Mac 播放的聲音嗎？" } }
+      }
+    },
+    "When enabled, AniCompanion captures the audio playing on your Mac (videos, music, calls) and transcribes it into live captions. With an on-device model, audio never leaves your Mac; on older systems some languages use Apple's speech servers. macOS will ask for Screen Recording permission (that's how system audio capture is authorized). You can turn this off anytime." : {
+      "comment" : "Settings: live transcription consent alert message",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "開啟後，AniCompanion 會擷取 Mac 正在播放的聲音（影片、音樂、通話）並轉錄成即時字幕。使用裝置端模型時，音訊完全不會離開你的 Mac；在較舊的系統上，部分語言會使用 Apple 的語音伺服器。macOS 會要求「螢幕錄製」權限（系統音訊擷取即透過此權限授權）。你隨時可以關閉。" } }
+      }
+    },
+    "On-device model installed — audio never leaves your Mac." : {
+      "comment" : "Settings: live transcription model status",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "已安裝裝置端模型——音訊完全不會離開你的 Mac。" } }
+      }
+    },
+    "On-device model downloads automatically on first use (one-time, free)." : {
+      "comment" : "Settings: live transcription model status",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "首次使用時會自動下載裝置端模型（一次性、免費）。" } }
+      }
+    },
+    "No on-device model for this language on this macOS — audio is transcribed by Apple's servers." : {
+      "comment" : "Settings: live transcription model status",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "這個 macOS 沒有此語言的裝置端模型——音訊會交由 Apple 伺服器轉錄。" } }
+      }
+    },
+    "This language isn't supported on this Mac." : {
+      "comment" : "Settings: live transcription model status",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "這台 Mac 不支援此語言。" } }
+      }
+    },
+    "Checking model availability…" : {
+      "comment" : "Settings: live transcription model status",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "正在檢查模型可用性…" } }
+      }
+    },
     "Voice interruption is on — just talk to interrupt her" : {
       "comment" : "Mic button tooltip when full-duplex is on",
       "localizations" : {

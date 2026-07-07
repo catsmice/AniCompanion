@@ -181,6 +181,33 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
     lock → she self-transcribes. Sample-sync is the classic hard AEC problem VPIO solves in hardware.
     See [[anicompanion-vpio-fullduplex]] in memory.
 
+### Live Transcription (opt-in, off by default)
+
+- **SystemAudioCaptureService** (@MainActor + non-isolated `SCStreamOutput` helper): continuous
+  `SCStream` with `capturesAudio=true` and **no video output attached** — captures what's *playing*
+  on the Mac (a video, a meeting; NOT the mic). `excludesCurrentProcessAudio=true` means 小光's own
+  TTS is never captured, so the self-transcription feedback loop can't happen by construction. Same
+  Screen Recording TCC permission as `ScreenVisionService`. Buffers are deep-copied out of the
+  `CMSampleBuffer` (`CMSampleBufferCopyPCMDataIntoAudioBufferList`) — the callback's backing memory
+  isn't valid after return.
+- **LiveTranscriptionController** (@MainActor; `AppState.liveTranscription`, long-lived — a Settings
+  save/`reinitializeServices()` doesn't cut a running session; `apply(enabled:locale:)` reconciles):
+  SCK audio → `StreamingTranscriptionEngine` → rolling caption (finalized tail + volatile partial,
+  ~72-char window, auto-hide after 5 s of silence). **Display-only** (Phase 1): captions go to the
+  pet speech bubble (`setSpeechText`, deferring while `isCharacterSpeaking`) and a caption overlay in
+  `MainView` that doubles as the "Listening to your Mac's audio" privacy indicator.
+- **Engines** (`StreamingTranscriptionEngine`): `SpeechTranscriber`/`SpeechAnalyzer` (macOS 26+ —
+  Apple's long-form on-device streaming engine behind Live Captions; no ~1-min request limit;
+  per-language model auto-downloaded in-app via `AssetInventory` with progress) with an
+  `SFSpeechRecognizer` fallback (macOS 15; cycle-per-utterance like `FullDuplexVoiceService`;
+  **Apple-server-based** for languages without on-device support, surfaced in Settings). Source
+  language (`LiveCaptionSourceLanguage`: ja-JP / ko-KR / zh-TW / en-US) is independent of the app
+  language — you watch a Japanese video while the UI runs in zh-Hant.
+- Runtime probe (this Mac, macOS 26.5, 2026-07-07): SpeechTranscriber supports ja/ko/zh/en (ja + ko
+  need a one-time model download; zh-TW/en installed); `SFSpeechRecognizer` has **no** on-device
+  ja/ko. Apple **Translation** packs ja→zh-Hant and ko→zh-Hant were *already installed* — the Phase 2
+  translate step can be fully on-device via `TranslationSession` (LLM as fallback).
+
 ### Screen Vision (opt-in, off by default)
 
 - **ScreenVisionService** (@MainActor): ScreenCaptureKit (`SCScreenshotManager`, macOS 14+). Two scopes
@@ -239,6 +266,10 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
 - **Screen Vision** *(off by default)* — **Let her see your screen** toggle (consent alert → Screen
   Recording permission), **Capture** scope (Focused window | Entire screen), **Glance interval** (how
   often she proactively glances while vision is on), and a **Test: capture now** preview.
+- **Live Transcription** *(off by default)* — **Live captions of your Mac's audio** toggle (consent
+  alert → Screen Recording permission, shared with vision), **Source language** (ja/ko/zh-TW/en) and
+  a live model-availability row (installed on-device / downloads on first use / Apple servers /
+  unsupported). Display-only captions; translate is Phase 2.
 
 Desktop Pet mode is not in this panel — toggle it from the 🐾 toolbar button, the **Character**
 menu, or **⌘⇧D**.
@@ -288,7 +319,10 @@ model, with smart
 self-gating proactive glances), live streaming chat UI, 16 emotions, skeletal animation clips,
 proactive idle timer (60 min, or a shorter configurable interval when screen vision is on),
 configurable VRM model (Settings), desktop pet mode (non-activating transparent draggable overlay
-with resize + speech bubble).
+with resize + speech bubble), opt-in **live transcription** Phase 1 (system audio → on-device Apple
+STT → live captions in the pet bubble / a caption overlay; display-only).
 
 Not yet done / deferred:
+- Live transcription Phase 2 (translate toggle: Apple `TranslationSession` on-device for ja/ko→zh,
+  LLM fallback) and Phase 3 (opt-in spoken dubbing with capture-gating; per-app capture scope)
 - Cron-scheduled proactive push (needs polling Hermes' jobs API or a delivery adapter)

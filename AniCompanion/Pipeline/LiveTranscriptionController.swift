@@ -1,0 +1,568 @@
+import Foundation
+import SwiftUI
+import Speech
+// @preconcurrency: engine `feed` paths handle AVAudioPCMBuffer inside @Sendable callbacks
+// (safe — each buffer is a fresh copy owned by the callback). Same pattern as FullDuplexVoiceService.
+@preconcurrency import AVFoundation
+
+// MARK: - LiveCaptionSourceLanguage
+
+/// The source language being transcribed (independent of the app/UI language — you watch a
+/// Japanese video while the app runs in Traditional Chinese).
+enum LiveCaptionSourceLanguage: String, CaseIterable, Identifiable, Sendable {
+    case japanese = "ja-JP"
+    case korean = "ko-KR"
+    case mandarinTaiwan = "zh-TW"
+    case english = "en-US"
+
+    var id: String { rawValue }
+
+    static let storageKey = "live_transcription_source_lang"
+
+    /// Endonym + English, so the label is recognizable regardless of UI language.
+    var displayName: String {
+        switch self {
+        case .japanese:       return "日本語 (Japanese)"
+        case .korean:         return "한국어 (Korean)"
+        case .mandarinTaiwan: return "中文（台灣）(Mandarin)"
+        case .english:        return "English (US)"
+        }
+    }
+
+    var locale: Locale { Locale(identifier: rawValue) }
+}
+
+// MARK: - LiveCaptionModelStatus
+
+/// On-device availability of the speech model for a source language — drives the Settings row.
+enum LiveCaptionModelStatus: Equatable, Sendable {
+    /// On-device model installed — private, offline, free.
+    case installed
+    /// Supported on-device (macOS 26+ SpeechTranscriber) after a one-time model download.
+    case needsDownload
+    /// No on-device path; recognition falls back to Apple's servers (macOS 15 SFSpeechRecognizer).
+    case appleServer
+    /// This language can't be transcribed on this system.
+    case unsupported
+}
+
+// MARK: - LiveTranscriptionError
+
+enum LiveTranscriptionError: LocalizedError {
+    case languageUnsupported(String)
+    case recognizerUnavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .languageUnsupported(let name):
+            return String(localized: "Live transcription doesn't support \(name) on this Mac.")
+        case .recognizerUnavailable:
+            return String(localized: "The speech recognizer is unavailable right now.")
+        }
+    }
+}
+
+// MARK: - StreamingTranscriptionEngine
+
+/// A continuous speech-to-text engine fed by external audio buffers (system audio here — not a
+/// mic tap). `feed` is called on the capture queue; everything else on the main actor.
+/// Sendable so the capture callback can hold the engine (impls are @unchecked, lock-guarded).
+protocol StreamingTranscriptionEngine: AnyObject, Sendable {
+    /// Start recognition. `onSegment(text, isFinal)` may be called from any thread.
+    /// `onDownloadProgress` reports one-time model download progress (0…1, macOS 26 path only).
+    @MainActor func start(
+        locale: Locale,
+        onSegment: @escaping @Sendable (String, Bool) -> Void,
+        onDownloadProgress: @escaping @Sendable (Double?) -> Void
+    ) async throws
+
+    /// Feed one PCM buffer (called on the capture queue; the buffer is owned by the callee).
+    nonisolated func feed(_ buffer: AVAudioPCMBuffer)
+
+    @MainActor func stop() async
+}
+
+// MARK: - LiveTranscriptionController
+
+/// Owns the live-transcription loop: system audio (ScreenCaptureKit) → streaming Apple speech
+/// recognition (source language) → live captions.
+///
+/// **Display-only** (Phase 1): captions render in the desktop-pet speech bubble and in the main
+/// window's caption overlay — she never *speaks* them (speaking your own transcription back over
+/// the video is Phase 3, with capture-gating).
+///
+/// Engine selection: `SpeechTranscriber` (macOS 26+, on-device, purpose-built for long-form live
+/// transcription, per-language model download) with an `SFSpeechRecognizer` fallback (macOS 15,
+/// Apple-server-based for languages without on-device support, cycled per utterance).
+@MainActor
+final class LiveTranscriptionController: ObservableObject {
+
+    // MARK: Published (UI)
+
+    /// Whether capture + recognition are running.
+    @Published private(set) var isRunning = false
+
+    /// The current caption line (finalized tail + live partial), trimmed for display.
+    @Published private(set) var captionText: String = ""
+
+    /// One-time speech-model download progress (0…1) while the engine fetches assets; nil otherwise.
+    @Published private(set) var modelDownloadProgress: Double?
+
+    /// The most recent start/stream error, for the Settings/overlay UI.
+    @Published private(set) var lastError: Error?
+
+    // MARK: Wiring (set by AppState)
+
+    /// Renders captions in the desktop-pet speech bubble.
+    weak var characterController: (any CharacterControllerProtocol)?
+
+    /// Whether 小光 is currently speaking a reply — her pipeline owns the bubble then, so
+    /// captions skip the bubble (the main-window overlay still updates).
+    var isCharacterSpeaking: @MainActor () -> Bool = { false }
+
+    // MARK: State
+
+    private let capture = SystemAudioCaptureService()
+    private var engine: (any StreamingTranscriptionEngine)?
+
+    /// Finalized text of the utterance in progress (SpeechTranscriber finalizes in chunks).
+    private var finalizedTail: String = ""
+    /// The live (volatile) partial being refined.
+    private var volatileText: String = ""
+
+    /// Hides the caption after audio goes quiet for a while.
+    private var idleHideTask: Task<Void, Never>?
+
+    /// Bumped per start so stale segment callbacks from a stopped session are ignored.
+    private var sessionGeneration: UInt64 = 0
+
+    /// The locale the current/last session was started with.
+    private(set) var sourceLocale: Locale = LiveCaptionSourceLanguage.japanese.locale
+
+    /// Longest caption shown at once (the bubble is small; captions read as a rolling tail).
+    private let maxCaptionLength = 72
+
+    // MARK: - Permission (delegated to the capture service)
+
+    var hasAccess: Bool { capture.hasAccess }
+
+    @discardableResult
+    func requestAccess() -> Bool { capture.requestAccess() }
+
+    // MARK: - Model status (Settings)
+
+    /// On-device model availability for a source language (drives the Settings status row).
+    static func modelStatus(for locale: Locale) async -> LiveCaptionModelStatus {
+        if #available(macOS 26.0, *) {
+            let supported = await SpeechTranscriber.supportedLocales
+            let target = locale.identifier(.bcp47)
+            if supported.contains(where: { $0.identifier(.bcp47) == target }) {
+                let installed = await SpeechTranscriber.installedLocales
+                return installed.contains(where: { $0.identifier(.bcp47) == target })
+                    ? .installed : .needsDownload
+            }
+        }
+        guard let recognizer = SFSpeechRecognizer(locale: locale) else { return .unsupported }
+        return recognizer.supportsOnDeviceRecognition ? .installed : .appleServer
+    }
+
+    // MARK: - Apply settings
+
+    /// Reconcile the running state with the saved settings (called on launch and on Settings
+    /// save). Starts, stops, or restarts (language change) as needed.
+    func apply(enabled: Bool, locale: Locale) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let localeChanged = locale.identifier != self.sourceLocale.identifier
+            if self.isRunning, !enabled || localeChanged {
+                await self.stop()
+            }
+            self.sourceLocale = locale
+            if enabled, !self.isRunning {
+                await self.start()
+            }
+        }
+    }
+
+    // MARK: - Start / Stop
+
+    func start() async {
+        guard !isRunning else { return }
+        lastError = nil
+
+        guard capture.hasAccess else {
+            lastError = SystemAudioCaptureError.notAuthorized
+            return
+        }
+
+        sessionGeneration &+= 1
+        let gen = sessionGeneration
+        finalizedTail = ""
+        volatileText = ""
+
+        let engine = Self.makeEngine(for: sourceLocale)
+        self.engine = engine
+
+        do {
+            try await engine.start(
+                locale: sourceLocale,
+                onSegment: { [weak self] text, isFinal in
+                    Task { @MainActor [weak self] in
+                        guard let self, gen == self.sessionGeneration else { return }
+                        self.handleSegment(text, isFinal: isFinal)
+                    }
+                },
+                onDownloadProgress: { [weak self] progress in
+                    Task { @MainActor [weak self] in
+                        guard let self, gen == self.sessionGeneration else { return }
+                        self.modelDownloadProgress = progress
+                    }
+                }
+            )
+
+            capture.onStreamStopped = { [weak self] error in
+                guard let self, gen == self.sessionGeneration else { return }
+                self.lastError = error
+                Task { @MainActor [weak self] in await self?.stop() }
+            }
+            try await capture.start(onBuffer: { [weak engine] buffer in
+                engine?.feed(buffer)
+            })
+
+            isRunning = true
+            Log.pipeline("[LiveCaption] Started (locale=\(sourceLocale.identifier))")
+        } catch {
+            lastError = error
+            modelDownloadProgress = nil
+            await engine.stop()
+            self.engine = nil
+            Log.pipeline("[LiveCaption] Start failed: \(error.localizedDescription)")
+        }
+    }
+
+    func stop() async {
+        sessionGeneration &+= 1 // invalidate in-flight segment callbacks
+        idleHideTask?.cancel(); idleHideTask = nil
+        await capture.stop()
+        if let engine {
+            await engine.stop()
+            self.engine = nil
+        }
+        isRunning = false
+        modelDownloadProgress = nil
+        captionText = ""
+        characterController?.setSpeechText(nil)
+        Log.pipeline("[LiveCaption] Stopped")
+    }
+
+    // MARK: - Caption assembly
+
+    /// Fold a recognition segment into the rolling caption. SpeechTranscriber alternates volatile
+    /// partials (refined in place) with finalized chunks; the legacy engine behaves the same via
+    /// its per-utterance cycle.
+    private func handleSegment(_ text: String, isFinal: Bool) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isFinal {
+            if !trimmed.isEmpty { finalizedTail += trimmed }
+            volatileText = ""
+        } else {
+            volatileText = trimmed
+        }
+
+        var display = finalizedTail + volatileText
+        if display.count > maxCaptionLength {
+            display = String(display.suffix(maxCaptionLength))
+            // The finalized prefix beyond the window will never be shown again — drop it.
+            if finalizedTail.count > maxCaptionLength {
+                finalizedTail = String(finalizedTail.suffix(maxCaptionLength))
+            }
+        }
+        guard !display.isEmpty else { return }
+
+        captionText = display
+        if !isCharacterSpeaking() {
+            characterController?.setSpeechText(display)
+        }
+        scheduleIdleHide()
+    }
+
+    /// Hide the caption a few seconds after recognition goes quiet (video paused, silence).
+    private func scheduleIdleHide() {
+        idleHideTask?.cancel()
+        idleHideTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            guard let self, !Task.isCancelled else { return }
+            self.captionText = ""
+            self.finalizedTail = ""
+            self.volatileText = ""
+            if !self.isCharacterSpeaking() {
+                self.characterController?.setSpeechText(nil)
+            }
+        }
+    }
+
+    // MARK: - Engine selection
+
+    private static func makeEngine(for locale: Locale) -> any StreamingTranscriptionEngine {
+        if #available(macOS 26.0, *) {
+            return TranscriberEngine()
+        }
+        return LegacyRecognizerEngine()
+    }
+}
+
+// MARK: - TranscriberEngine (macOS 26+, SpeechAnalyzer / SpeechTranscriber)
+
+/// Apple's long-form on-device streaming transcriber (the Live Captions engine): no ~1-minute
+/// request limit, volatile+finalized results, per-language model managed via `AssetInventory`
+/// (downloaded in-app on first use, with progress).
+@available(macOS 26.0, *)
+private final class TranscriberEngine: StreamingTranscriptionEngine, @unchecked Sendable {
+
+    private var analyzer: SpeechAnalyzer?
+    private var resultsTask: Task<Void, Never>?
+
+    /// Guards the members the capture-queue `feed` touches.
+    private let lock = NSLock()
+    private var inputContinuation: AsyncStream<AnalyzerInput>.Continuation?
+    private var analyzerFormat: AVAudioFormat?
+    private var converter: AVAudioConverter?
+
+    @MainActor
+    func start(
+        locale: Locale,
+        onSegment: @escaping @Sendable (String, Bool) -> Void,
+        onDownloadProgress: @escaping @Sendable (Double?) -> Void
+    ) async throws {
+        let supported = await SpeechTranscriber.supportedLocales
+        let target = locale.identifier(.bcp47)
+        guard supported.contains(where: { $0.identifier(.bcp47) == target }) else {
+            throw LiveTranscriptionError.languageUnsupported(locale.identifier)
+        }
+
+        let transcriber = SpeechTranscriber(
+            locale: locale,
+            transcriptionOptions: [],
+            reportingOptions: [.volatileResults],
+            attributeOptions: []
+        )
+
+        // One-time on-device model download (no-op when already installed).
+        if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
+            Log.pipeline("[LiveCaption] Downloading speech model for \(locale.identifier)…")
+            let progress = request.progress
+            let poller = Task {
+                while !Task.isCancelled {
+                    onDownloadProgress(progress.fractionCompleted)
+                    try? await Task.sleep(for: .milliseconds(300))
+                }
+            }
+            defer { poller.cancel(); onDownloadProgress(nil) }
+            try await request.downloadAndInstall()
+            Log.pipeline("[LiveCaption] Speech model installed for \(locale.identifier)")
+        }
+
+        let analyzer = SpeechAnalyzer(modules: [transcriber])
+        self.analyzer = analyzer
+
+        let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber])
+        let (stream, continuation) = AsyncStream<AnalyzerInput>.makeStream()
+        lock.withLock {
+            self.analyzerFormat = format
+            self.inputContinuation = continuation
+        }
+
+        try await analyzer.start(inputSequence: stream)
+
+        resultsTask = Task {
+            do {
+                for try await result in transcriber.results {
+                    onSegment(String(result.text.characters), result.isFinal)
+                }
+            } catch is CancellationError {
+                // Session torn down.
+            } catch {
+                Log.pipeline("[LiveCaption] Transcriber results ended: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    nonisolated func feed(_ buffer: AVAudioPCMBuffer) {
+        lock.lock()
+        guard let continuation = inputContinuation else { lock.unlock(); return }
+        let targetFormat = analyzerFormat
+
+        // Convert to the analyzer's preferred format if it differs. The converter is created
+        // once and reused so its resampler state carries across buffer boundaries.
+        var outBuffer = buffer
+        if let targetFormat, targetFormat != buffer.format {
+            if converter == nil || converter?.inputFormat != buffer.format {
+                converter = AVAudioConverter(from: buffer.format, to: targetFormat)
+            }
+            guard let converter else { lock.unlock(); return }
+            let ratio = targetFormat.sampleRate / buffer.format.sampleRate
+            let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 64
+            guard let converted = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: capacity) else {
+                lock.unlock(); return
+            }
+            let feeder = ConverterInput(buffer)
+            var error: NSError?
+            converter.convert(to: converted, error: &error) { _, status in
+                guard let next = feeder.take() else { status.pointee = .noDataNow; return nil }
+                status.pointee = .haveData
+                return next
+            }
+            guard error == nil, converted.frameLength > 0 else { lock.unlock(); return }
+            outBuffer = converted
+        }
+        lock.unlock()
+
+        continuation.yield(AnalyzerInput(buffer: outBuffer))
+    }
+
+    @MainActor
+    func stop() async {
+        lock.withLock {
+            inputContinuation?.finish()
+            inputContinuation = nil
+            converter = nil
+        }
+
+        if let analyzer {
+            try? await analyzer.finalizeAndFinishThroughEndOfInput()
+        }
+        analyzer = nil
+        resultsTask?.cancel()
+        resultsTask = nil
+    }
+}
+
+/// Hands a single buffer to `AVAudioConverter`'s @Sendable input block exactly once
+/// (the block runs synchronously inside `convert`; the box just satisfies Sendability).
+private final class ConverterInput: @unchecked Sendable {
+    private var pending: AVAudioPCMBuffer?
+    init(_ buffer: AVAudioPCMBuffer) { pending = buffer }
+    func take() -> AVAudioPCMBuffer? {
+        defer { pending = nil }
+        return pending
+    }
+}
+
+// MARK: - LegacyRecognizerEngine (macOS 15, SFSpeechRecognizer)
+
+/// Fallback for pre-26 systems: a continuously re-armed `SFSpeechRecognizer` (the same
+/// cycle-per-utterance pattern as `FullDuplexVoiceService`, fed by SCK buffers instead of a mic
+/// tap). For languages without on-device support (ja/ko on macOS 15) audio goes to Apple's
+/// servers — surfaced in Settings as "Apple servers".
+private final class LegacyRecognizerEngine: NSObject, StreamingTranscriptionEngine, @unchecked Sendable {
+
+    private let lock = NSLock()
+    private var request: SFSpeechAudioBufferRecognitionRequest?
+
+    private var recognizer: SFSpeechRecognizer?
+    private var recognitionTask: SFSpeechRecognitionTask?
+    private var onSegment: (@Sendable (String, Bool) -> Void)?
+    private var running = false
+    private var generation: UInt64 = 0
+
+    @MainActor
+    func start(
+        locale: Locale,
+        onSegment: @escaping @Sendable (String, Bool) -> Void,
+        onDownloadProgress: @escaping @Sendable (Double?) -> Void
+    ) async throws {
+        try await Self.ensureSpeechAuthorization()
+
+        guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
+            throw LiveTranscriptionError.recognizerUnavailable
+        }
+        self.recognizer = recognizer
+        self.onSegment = onSegment
+        running = true
+        startCycle()
+        Log.pipeline("[LiveCaption] Legacy recognizer started (onDevice=\(recognizer.supportsOnDeviceRecognition))")
+    }
+
+    /// One recognition request per utterance/segment, re-armed on `isFinal` or error —
+    /// SFSpeechRecognizer caps a single request at about a minute, so cycling is mandatory.
+    @MainActor
+    private func startCycle() {
+        guard running, let recognizer else { return }
+
+        generation &+= 1
+        let gen = generation
+
+        let req = SFSpeechAudioBufferRecognitionRequest()
+        req.shouldReportPartialResults = true
+        if recognizer.supportsOnDeviceRecognition {
+            req.requiresOnDeviceRecognition = true
+        }
+        lock.lock(); request = req; lock.unlock()
+
+        recognitionTask = recognizer.recognitionTask(with: req) { [weak self] result, error in
+            guard let self else { return }
+            Task { @MainActor [weak self] in
+                guard let self, self.running, gen == self.generation else { return }
+                if let result {
+                    let text = result.bestTranscription.formattedString
+                    self.onSegment?(text, result.isFinal)
+                    if result.isFinal {
+                        self.recycle(delay: .zero)
+                    }
+                    return
+                }
+                if error != nil {
+                    // Includes benign "no speech" while the source is silent — re-arm with a
+                    // short breath so a persistent failure can't spin.
+                    self.recycle(delay: .milliseconds(400))
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func recycle(delay: Duration) {
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        lock.lock(); request = nil; lock.unlock()
+        Task { @MainActor [weak self] in
+            if delay > .zero { try? await Task.sleep(for: delay) }
+            self?.startCycle()
+        }
+    }
+
+    nonisolated func feed(_ buffer: AVAudioPCMBuffer) {
+        lock.lock(); let req = request; lock.unlock()
+        req?.append(buffer)
+    }
+
+    @MainActor
+    func stop() async {
+        running = false
+        generation &+= 1
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        lock.withLock {
+            request?.endAudio()
+            request = nil
+        }
+        onSegment = nil
+    }
+
+    /// Speech-recognition authorization (no mic involved — the audio is system output).
+    /// Mirrors `FullDuplexVoiceService`: request off the main actor (the macOS crash gotcha).
+    private static func ensureSpeechAuthorization() async throws {
+        let status = SFSpeechRecognizer.authorizationStatus()
+        let resolved: SFSpeechRecognizerAuthorizationStatus
+        if status == .notDetermined {
+            resolved = await withCheckedContinuation { c in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0) }
+                }
+            }
+        } else {
+            resolved = status
+        }
+        guard resolved == .authorized else { throw STTError.notAuthorized }
+    }
+}

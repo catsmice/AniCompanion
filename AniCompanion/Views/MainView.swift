@@ -21,6 +21,9 @@ struct MainView: View {
                 ThreeVRMRenderView(characterManager: appState.characterManager)
                     .frame(minWidth: 400)
                     .layoutPriority(1)
+                    .overlay(alignment: .bottom) {
+                        LiveCaptionOverlay(controller: appState.liveTranscription)
+                    }
 
                 Divider()
                     .background(Color.white.opacity(0.1))
@@ -86,6 +89,55 @@ struct MainView: View {
             .navigationTitle(Text("AI Agent | Xiaoguang", comment: "Window title — character name"))
         }
         .preferredColorScheme(.dark)
+    }
+}
+
+// MARK: - LiveCaptionOverlay
+
+/// Caption bar over the character while live transcription runs: a persistent "listening to
+/// your Mac's audio" indicator (privacy — system audio is being captured) plus the rolling
+/// caption. In pet mode the captions render in the speech bubble instead.
+private struct LiveCaptionOverlay: View {
+
+    @ObservedObject var controller: LiveTranscriptionController
+
+    var body: some View {
+        if controller.isRunning {
+            VStack(spacing: 6) {
+                HStack(spacing: 5) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 10, weight: .semibold))
+                        .symbolEffect(.variableColor.iterative, options: .repeating)
+                    if let progress = controller.modelDownloadProgress {
+                        Text("Downloading speech model… \(Int(progress * 100))%")
+                            .font(.system(size: 10, weight: .medium))
+                    } else {
+                        Text("Listening to your Mac's audio")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                }
+                .foregroundStyle(.white.opacity(0.55))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(Color.black.opacity(0.45)))
+
+                if !controller.captionText.isEmpty {
+                    Text(controller.captionText)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.black.opacity(0.6))
+                        )
+                        .transition(.opacity)
+                }
+            }
+            .padding(.bottom, 18)
+            .animation(.easeInOut(duration: 0.18), value: controller.captionText.isEmpty)
+        }
     }
 }
 

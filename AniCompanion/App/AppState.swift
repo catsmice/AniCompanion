@@ -100,6 +100,14 @@ final class AppState: ObservableObject {
     /// How often (in minutes) 小光 glances at your screen proactively while vision is on.
     @AppStorage("vision_proactive_interval_minutes") var visionProactiveIntervalMinutes: Int = 5
 
+    /// Whether live transcription of the Mac's system audio is on. Off by default; enabling it
+    /// prompts for macOS Screen Recording permission (ScreenCaptureKit audio capture).
+    @AppStorage("live_transcription_enabled") var liveTranscriptionEnabled: Bool = false
+
+    /// Source language being transcribed (independent of the app/UI language).
+    @AppStorage(LiveCaptionSourceLanguage.storageKey) var liveTranscriptionSourceLanguage: String
+        = LiveCaptionSourceLanguage.japanese.rawValue
+
     private var effectiveVRMModelFilename: String {
         let filename = vrmModelFilename.trimmingCharacters(in: .whitespacesAndNewlines)
         return filename.isEmpty ? "AliciaSolid.vrm" : filename
@@ -131,6 +139,11 @@ final class AppState: ObservableObject {
     /// the user's active app across the whole session (see `ScreenVisionService`); gated by
     /// `screenVisionEnabled`. Not `@Published` — nothing observes it reactively.
     let screenVisionService = ScreenVisionService()
+
+    /// Live transcription of the Mac's system audio (SCK audio → Apple STT → captions).
+    /// Long-lived and independent of `reinitializeServices()` (a Settings save shouldn't cut a
+    /// running caption session unless its own settings changed — `apply` reconciles).
+    let liveTranscription = LiveTranscriptionController()
 
     // MARK: - Private State
 
@@ -217,6 +230,14 @@ final class AppState: ObservableObject {
         // Verify gateway reachability (HTTP health check).
         ws.connect()
 
+        // Live transcription: captions go to the same pet bubble the conversation uses, so it
+        // defers to her while she's speaking; `apply` starts/stops/restarts per saved settings.
+        liveTranscription.characterController = characterManager
+        liveTranscription.isCharacterSpeaking = { [weak self] in
+            self?.conversationController?.isSpeaking ?? false
+        }
+        applyLiveTranscriptionSettings()
+
         // Load the configured VRM character model from Resources/VRMModel.
         characterManager.loadModel(named: effectiveVRMModelFilename)
 
@@ -277,6 +298,12 @@ final class AppState: ObservableObject {
                 speed: openAITTSSpeed
             )
         }
+    }
+
+    /// Reconcile the live-transcription session with the saved settings (start/stop/restart).
+    func applyLiveTranscriptionSettings() {
+        let language = LiveCaptionSourceLanguage(rawValue: liveTranscriptionSourceLanguage) ?? .japanese
+        liveTranscription.apply(enabled: liveTranscriptionEnabled, locale: language.locale)
     }
 
     /// Tears down existing services and recreates them with current settings.

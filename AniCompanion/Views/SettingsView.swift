@@ -54,6 +54,12 @@ struct SettingsView: View {
     @State private var voicePreviewError: String?
     @State private var voicePreviewTask: Task<Void, Never>?
 
+    // Live transcription (default off; opt-in with consent).
+    @State private var liveTranscriptionEnabled: Bool = false
+    @State private var liveCaptionSourceLanguage: LiveCaptionSourceLanguage = .japanese
+    @State private var showLiveCaptionConsent = false
+    @State private var liveCaptionModelStatus: LiveCaptionModelStatus?
+
     // Screen vision (default off; opt-in with consent).
     @State private var screenVisionEnabled: Bool = false
     @State private var screenVisionScope: ScreenVisionScope = .focusedWindow
@@ -587,6 +593,59 @@ struct SettingsView: View {
                             }
                         }
                     }
+
+                    // MARK: Section 6: Live Transcription
+
+                    SettingsSection(title: "Live Transcription", icon: "captions.bubble") {
+                        VStack(alignment: .leading, spacing: 14) {
+                            // Same user-interaction-only binding trick as the vision toggle, so
+                            // the consent alert only appears when the user flips this off→on.
+                            Toggle("Live captions of your Mac's audio", isOn: Binding(
+                                get: { liveTranscriptionEnabled },
+                                set: { isOn in
+                                    liveTranscriptionEnabled = isOn
+                                    if isOn { showLiveCaptionConsent = true }
+                                }
+                            ))
+                            .toggleStyle(.switch)
+
+                            Text("Off by default. When on, 小光 listens to the audio playing on your Mac (a video, a meeting) and shows live captions — in her speech bubble in pet mode, or under the character here. Display-only; nothing is spoken.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.white.opacity(0.4))
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            if liveTranscriptionEnabled {
+                                SettingsField(label: "Source language") {
+                                    Picker("", selection: $liveCaptionSourceLanguage) {
+                                        ForEach(LiveCaptionSourceLanguage.allCases) { lang in
+                                            Text(lang.displayName).tag(lang)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .labelsHidden()
+                                    .onChange(of: liveCaptionSourceLanguage) { _, _ in
+                                        refreshLiveCaptionModelStatus()
+                                    }
+                                }
+
+                                liveCaptionModelStatusRow
+
+                                if !screenRecordingGranted {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundStyle(.yellow.opacity(0.85))
+                                        Text("Screen Recording permission needed (may require a relaunch after granting).")
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(.white.opacity(0.6))
+                                            .fixedSize(horizontal: false, vertical: true)
+                                        Button("Grant…") { requestScreenRecording() }
+                                            .buttonStyle(.link)
+                                            .font(.system(size: 11))
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 20)
@@ -633,6 +692,12 @@ struct SettingsView: View {
             Button("OK") { dismiss() }
         } message: {
             Text("Restart AniCompanion to apply the new interface language. (The character switches right away.)")
+        }
+        .alert("Listen to your Mac's audio?", isPresented: $showLiveCaptionConsent) {
+            Button("Enable") { requestScreenRecording() }
+            Button("Cancel", role: .cancel) { liveTranscriptionEnabled = false }
+        } message: {
+            Text("When enabled, AniCompanion captures the audio playing on your Mac (videos, music, calls) and transcribes it into live captions. With an on-device model, audio never leaves your Mac; on older systems some languages use Apple's speech servers. macOS will ask for Screen Recording permission (that's how system audio capture is authorized). You can turn this off anytime.")
         }
         .alert("Let her see your screen?", isPresented: $showVisionConsent) {
             Button("Enable") { enableScreenVision() }
@@ -745,6 +810,50 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Live Transcription
+
+    /// Availability of the selected source language's speech model, as a status row.
+    @ViewBuilder
+    private var liveCaptionModelStatusRow: some View {
+        HStack(spacing: 8) {
+            switch liveCaptionModelStatus {
+            case .installed:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green.opacity(0.85))
+                Text("On-device model installed — audio never leaves your Mac.")
+            case .needsDownload:
+                Image(systemName: "arrow.down.circle")
+                    .foregroundStyle(.blue.opacity(0.85))
+                Text("On-device model downloads automatically on first use (one-time, free).")
+            case .appleServer:
+                Image(systemName: "cloud")
+                    .foregroundStyle(.white.opacity(0.6))
+                Text("No on-device model for this language on this macOS — audio is transcribed by Apple's servers.")
+            case .unsupported:
+                Image(systemName: "xmark.circle")
+                    .foregroundStyle(.red.opacity(0.85))
+                Text("This language isn't supported on this Mac.")
+            case nil:
+                ProgressView().controlSize(.mini)
+                Text("Checking model availability…")
+            }
+        }
+        .font(.system(size: 11))
+        .foregroundStyle(.white.opacity(0.6))
+        .fixedSize(horizontal: false, vertical: true)
+        .task(id: liveCaptionSourceLanguage) {
+            refreshLiveCaptionModelStatus()
+        }
+    }
+
+    private func refreshLiveCaptionModelStatus() {
+        let locale = liveCaptionSourceLanguage.locale
+        liveCaptionModelStatus = nil
+        Task { @MainActor in
+            liveCaptionModelStatus = await LiveTranscriptionController.modelStatus(for: locale)
+        }
+    }
+
     // MARK: - Screen Vision
 
     /// Called after the user confirms the consent alert: request macOS Screen Recording permission.
@@ -830,6 +939,10 @@ struct SettingsView: View {
         screenVisionScope = ScreenVisionScope(rawValue: appState.screenVisionScope) ?? .focusedWindow
         visionProactiveIntervalMinutes = appState.visionProactiveIntervalMinutes
         screenRecordingGranted = appState.screenVisionService.hasAccess
+        liveTranscriptionEnabled = appState.liveTranscriptionEnabled
+        liveCaptionSourceLanguage = LiveCaptionSourceLanguage(
+            rawValue: appState.liveTranscriptionSourceLanguage
+        ) ?? .japanese
     }
 
     /// Write local state back to AppState for persistence, then reinitialize services.
@@ -872,6 +985,8 @@ struct SettingsView: View {
         appState.screenVisionEnabled = screenVisionEnabled
         appState.screenVisionScope = screenVisionScope.rawValue
         appState.visionProactiveIntervalMinutes = visionProactiveIntervalMinutes
+        appState.liveTranscriptionEnabled = liveTranscriptionEnabled
+        appState.liveTranscriptionSourceLanguage = liveCaptionSourceLanguage.rawValue
 
         // Persist the language. The character/persona + STT pick it up immediately on
         // reinitialize; the SwiftUI interface needs `AppleLanguages` + a relaunch.
