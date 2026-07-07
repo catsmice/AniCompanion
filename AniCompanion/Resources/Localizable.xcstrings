@@ -1,6 +1,54 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Voice interruption is on — just talk to interrupt her" : {
+      "comment" : "Mic button tooltip when full-duplex is on",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "已開啟語音打斷——直接說話即可打斷她" } }
+      }
+    },
+    "Rate" : {
+      "comment" : "Settings: Apple TTS speech rate",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "語速" } }
+      }
+    },
+    "Auto (best installed)" : {
+      "comment" : "Settings: Apple TTS auto voice option",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "自動（已安裝的最佳語音）" } }
+      }
+    },
+    "Runs fully on-device — no key, no network. For natural-sounding voices, download an Enhanced or Premium voice in System Settings → Accessibility → Spoken Content → Manage Voices." : {
+      "comment" : "Settings: Apple TTS hint",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "完全在裝置上執行——不需金鑰、不需網路。若想要更自然的語音，可在「系統設定 → 輔助使用 → 朗讀內容 → 管理語音」下載更高品質的語音。" } }
+      }
+    },
+    "Hands-free mode" : {
+      "comment" : "Settings: hands-free voice toggle",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "免持模式" } }
+      }
+    },
+    "Keep listening and reply automatically — just talk, no need to click the mic each time." : {
+      "comment" : "Settings: hands-free mode hint",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "持續聆聽並自動回覆——直接說話即可，不必每次點擊麥克風。" } }
+      }
+    },
+    "Let me interrupt her by voice" : {
+      "comment" : "Settings: full-duplex barge-in toggle",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "允許用語音打斷她" } }
+      }
+    },
+    "Full-duplex: talk over her to interrupt. While she's speaking, other apps' audio is briefly quieted (needed for echo cancellation). Off: take turns and interrupt with the mic button." : {
+      "comment" : "Settings: full-duplex mode hint",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "全雙工：可直接說話打斷她。當她說話時，其他 App 的聲音會暫時降低（用於回音消除）。關閉時：輪流對話，並用麥克風按鈕打斷。" } }
+      }
+    },
     "Glance interval" : {
       "comment" : "Settings: screen vision proactive-glance interval",
       "localizations" : {

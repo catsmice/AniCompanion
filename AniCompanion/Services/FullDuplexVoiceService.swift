@@ -26,10 +26,14 @@ final class FullDuplexVoiceService: ObservableObject {
     @Published private(set) var currentAmplitude: Float = 0
     @Published private(set) var isSpeaking: Bool = false
 
-    /// Whether the mic is mid-capturing a user utterance (a partial is buffered or the silence
-    /// timer is running). Lazy-VPIO teardown must wait for this so a barge-in isn't cut off.
+    /// Whether the mic is mid-capturing a user utterance, so lazy-VPIO teardown must wait (else a
+    /// barge-in would be cut off). True if a partial is buffered / the silence timer is running, OR
+    /// we're in the grace window right after a barge-in — which covers the gap between the RMS
+    /// trigger and the recognizer's first partial (on-device first-partial latency can exceed the
+    /// teardown debounce, which would otherwise drop the interruption).
     var isCapturingUtterance: Bool {
-        silenceTimer != nil || !currentUtterance.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if lastBargeIn > 0, CACurrentMediaTime() - lastBargeIn < bargeInGrace { return true }
+        return silenceTimer != nil || !currentUtterance.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // MARK: Callbacks (set by ConversationController)
@@ -67,6 +71,10 @@ final class FullDuplexVoiceService: ObservableObject {
 
     // Barge-in RMS gating.
     private var loudSince: TimeInterval?
+    /// Timestamp of the last barge-in, and how long after it the engine is held open (see
+    /// `isCapturingUtterance`) to let recognition warm up before lazy teardown can win.
+    private var lastBargeIn: TimeInterval = 0
+    private let bargeInGrace: TimeInterval = 2.5
 
     // Playback continuation + amplitude (mirrors AudioPlayerService).
     private var playbackContinuation: CheckedContinuation<Void, Error>?
@@ -124,7 +132,11 @@ final class FullDuplexVoiceService: ObservableObject {
     /// Decode + play one audio segment through the VPIO engine, returning when it finishes.
     /// `currentAmplitude` drives lip-sync. Barge-in cuts this off early.
     func play(_ data: Data) async throws {
-        guard isRunning, let playbackFormat else { return }
+        // Throw (don't silently return) so the pipeline can't race through segments as if they
+        // played when the engine is unexpectedly down.
+        guard isRunning, let playbackFormat else {
+            throw AudioPlayerError.playbackFailed("full-duplex engine not running")
+        }
 
         // Decode to PCM and convert to the engine's playback format (48k).
         let pcm = try decodeToPCM(data: data, target: playbackFormat)
@@ -179,6 +191,7 @@ final class FullDuplexVoiceService: ObservableObject {
             if let since = loudSince {
                 if now - since >= bargeInSustain {
                     loudSince = nil
+                    lastBargeIn = now // hold the engine open through recognition warm-up
                     Log.pipeline("[FullDuplex] barge-in")
                     stopPlayback()
                     onBargeIn?()
@@ -238,7 +251,7 @@ final class FullDuplexVoiceService: ObservableObject {
         }
     }
 
-    /// Tear down the current recognition task (called when she starts speaking / on teardown).
+    /// Tear down the current recognition task + request. Reused on `stop()` and between utterances.
     private func stopRecognition() {
         recognitionGen &+= 1 // invalidate the cancelling task's trailing callbacks
         invalidateSilenceTimer()
@@ -250,16 +263,16 @@ final class FullDuplexVoiceService: ObservableObject {
         currentUtterance = ""
     }
 
-    /// Deliver any captured utterance as a turn, then re-arm recognition for the next one.
+    /// Deliver any captured utterance as a turn, then re-arm a fresh recognition cycle.
     private func finalizeUtterance() {
+        guard isRunning else { return } // ignore a silence-timer callback that lands after stop()
         let text = currentUtterance.trimmingCharacters(in: .whitespacesAndNewlines)
-        currentUtterance = ""
-        invalidateSilenceTimer()
-        recognitionTask = nil // this task is ending
-        if !text.isEmpty && !isSpeaking {
+        let wasSpeaking = isSpeaking
+        stopRecognition() // cancel + endAudio the finishing task (else it lingers) and clear state
+        if !text.isEmpty && !wasSpeaking {
             onUserUtterance?(text)
         }
-        startRecognition() // re-arm for the next utterance (no-op if now speaking)
+        startRecognition() // re-arm for the next utterance
     }
 
     private func resetSilenceTimer() {

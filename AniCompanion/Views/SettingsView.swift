@@ -406,7 +406,7 @@ struct SettingsView: View {
                                     .toggleStyle(.switch)
                                     .padding(.leading, 16)
 
-                                Text("Full-duplex: talk over her and she'll stop to listen (uses echo cancellation, which slightly changes her voice). Off: you take turns and interrupt with the mic button.")
+                                Text("Full-duplex: talk over her to interrupt. While she's speaking, other apps' audio is briefly quieted (needed for echo cancellation). Off: take turns and interrupt with the mic button.")
                                     .font(.system(size: 11))
                                     .foregroundStyle(.white.opacity(0.4))
                                     .fixedSize(horizontal: false, vertical: true)

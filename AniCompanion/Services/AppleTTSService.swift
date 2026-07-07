@@ -195,6 +195,13 @@ private final class AppleSpeechRenderer: @unchecked Sendable {
     private var outputURL: URL?
     private var continuation: CheckedContinuation<Data, Error>?
     private var didFinish = false
+    private var wroteAudio = false
+
+    /// Safety net: if `write` never delivers its terminal (zero-length) buffer — a documented
+    /// flakiness for unavailable/mismatched voices — fail instead of hanging the continuation
+    /// (and leaking the synth + temp file) forever. TTS renders far faster than real time, so a
+    /// generous fixed timeout only ever catches a true hang.
+    private let renderTimeout: TimeInterval = 20
 
     private func run(text: String, voiceIdentifier: String?, rate: Float, pitch: Float) async throws -> Data {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Data, Error>) in
@@ -238,32 +245,25 @@ private final class AppleSpeechRenderer: @unchecked Sendable {
                             self.audioFile = try AVAudioFile(forWriting: url, settings: pcm.format.settings)
                         }
                         try self.audioFile?.write(from: pcm)
+                        self.wroteAudio = true
                     } catch {
                         self.finish(.failure(TTSError.decodingError("Failed to write TTS audio: \(error.localizedDescription)")))
                     }
+                }
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + self.renderTimeout) { [weak self] in
+                    self?.finish(.failure(TTSError.decodingError("Apple TTS render timed out.")))
                 }
             }
         }
     }
 
     private func finishSuccess() {
-        // Close the file (release the AVAudioFile) before reading it back.
-        let url = outputURL
-        lock.lock()
-        audioFile = nil
-        lock.unlock()
-
-        guard let url else {
-            finish(.failure(TTSError.decodingError("Apple TTS output file missing.")))
-            return
-        }
-        do {
-            let data = try Data(contentsOf: url)
-            try? FileManager.default.removeItem(at: url)
-            finish(.success(data))
-        } catch {
-            finish(.failure(TTSError.decodingError("Failed to read TTS audio: \(error.localizedDescription)")))
-        }
+        audioFile = nil // close the file (release the AVAudioFile) before reading it back
+        // No non-empty buffers (e.g. punctuation-only text) → return empty so the caller's
+        // empty-guard yields a clean "no audio" outcome, not a misleading read error.
+        guard wroteAudio, let url = outputURL else { finish(.success(Data())); return }
+        finish(.success((try? Data(contentsOf: url)) ?? Data()))
     }
 
     private func finish(_ result: Result<Data, Error>) {
@@ -276,10 +276,13 @@ private final class AppleSpeechRenderer: @unchecked Sendable {
         continuation = nil
         let synth = synthesizer
         synthesizer = nil
+        let url = outputURL
         lock.unlock()
 
-        // Drop the synthesizer reference outside the lock.
-        _ = synth
+        // Tear the synth down (esp. when bailing mid-render) and clean up the temp file on every
+        // path, then resume exactly once.
+        synth?.stopSpeaking(at: .immediate)
+        if let url { try? FileManager.default.removeItem(at: url) }
         cont.resume(with: result)
     }
 }

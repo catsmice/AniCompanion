@@ -85,7 +85,9 @@ struct ChatView: View {
             // MARK: - Input Bar
 
             HStack(spacing: 8) {
-                // Microphone button (push-to-talk)
+                // Microphone button (push-to-talk). Disabled in full-duplex mode: there, the VPIO
+                // engine owns the mic while she speaks, so opening STTService's engine here would
+                // grab the same input device twice. In full-duplex you interrupt by just talking.
                 Button {
                     toggleVoiceInput()
                 } label: {
@@ -95,9 +97,12 @@ struct ChatView: View {
                         .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
-                .help(conversationController.isListening
-                    ? "Stop listening"
-                    : (conversationController.isSpeaking ? "Interrupt & speak" : "Start voice input"))
+                .disabled(conversationController.fullDuplexEnabled)
+                .help(conversationController.fullDuplexEnabled
+                    ? "Voice interruption is on — just talk to interrupt her"
+                    : (conversationController.isListening
+                        ? "Stop listening"
+                        : (conversationController.isSpeaking ? "Interrupt & speak" : "Start voice input")))
 
                 // Text input field
                 TextField("Type a message...", text: $inputText)
