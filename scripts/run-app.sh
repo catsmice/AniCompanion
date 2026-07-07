@@ -68,6 +68,23 @@ if [[ -z "${APP:-}" || ! -d "$APP" ]]; then
 fi
 echo "→ App: $APP"
 
+# Optional stable dev signing (see CONTRIBUTING.md → "Testing screen vision"): if
+# scripts/dev-signing-identity exists (gitignored; contains a codesign identity name or SHA-1
+# hash), re-sign the build with it so signature-bound TCC grants (Screen Recording — used by
+# screen vision AND live transcription) survive rebuilds. Without it, ad-hoc-signed builds lose
+# the grant on every rebuild. Idempotent and fast, so it runs on every launch.
+IDENTITY_FILE="$SCRIPT_DIR/dev-signing-identity"
+if [[ -f "$IDENTITY_FILE" ]]; then
+  IDENTITY="$(head -1 "$IDENTITY_FILE" | tr -d '[:space:]')"
+  if [[ -n "$IDENTITY" ]]; then
+    echo "→ Re-signing with dev identity ($IDENTITY)…"
+    codesign --force --deep --sign "$IDENTITY" \
+      --entitlements "$REPO_ROOT/AniCompanion/AniCompanion.entitlements" \
+      --timestamp=none "$APP" \
+      || echo "⚠ Re-sign failed — launching the build as-is (TCC grants may not stick)" >&2
+  fi
+fi
+
 # Quit a running instance if asked, so `open` launches the fresh build rather than
 # re-focusing whatever was already up.
 if [[ "$DO_QUIT" == "1" ]]; then

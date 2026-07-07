@@ -102,17 +102,32 @@ private struct LiveCaptionOverlay: View {
     @ObservedObject var controller: LiveTranscriptionController
 
     var body: some View {
-        if controller.isRunning {
+        // Visible for every enabled state — running, still downloading the model (isRunning is
+        // false until the one-time download completes), or failed — so the feature is never
+        // silently "on but showing nothing."
+        if controller.isEnabled {
             VStack(spacing: 6) {
                 HStack(spacing: 5) {
-                    Image(systemName: "waveform")
-                        .font(.system(size: 10, weight: .semibold))
-                        .symbolEffect(.variableColor.iterative, options: .repeating)
-                    if let progress = controller.modelDownloadProgress {
+                    if controller.lastError != nil {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.yellow.opacity(0.9))
+                    } else {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 10, weight: .semibold))
+                            .symbolEffect(.variableColor.iterative, options: .repeating)
+                    }
+                    if let error = controller.lastError {
+                        Text(error.localizedDescription)
+                            .font(.system(size: 10, weight: .medium))
+                    } else if let progress = controller.modelDownloadProgress {
                         Text("Downloading speech model… \(Int(progress * 100))%")
                             .font(.system(size: 10, weight: .medium))
-                    } else {
+                    } else if controller.isRunning {
                         Text("Listening to your Mac's audio")
+                            .font(.system(size: 10, weight: .medium))
+                    } else {
+                        Text("Starting live captions…")
                             .font(.system(size: 10, weight: .medium))
                     }
                 }
@@ -120,6 +135,8 @@ private struct LiveCaptionOverlay: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
                 .background(Capsule().fill(Color.black.opacity(0.45)))
+                .frame(maxWidth: 420)
+                .fixedSize(horizontal: false, vertical: true)
 
                 if !controller.captionText.isEmpty {
                     Text(controller.captionText)

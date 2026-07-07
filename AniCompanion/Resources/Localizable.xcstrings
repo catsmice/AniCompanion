@@ -1,6 +1,18 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Starting live captions…" : {
+      "comment" : "Live captions: overlay while session starts",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "正在啟動即時字幕…" } }
+      }
+    },
+    "Live captions are running." : {
+      "comment" : "Settings: live transcription session status",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "即時字幕執行中。" } }
+      }
+    },
     "No display found to capture audio from." : {
       "comment" : "Live captions: SCK error",
       "localizations" : {

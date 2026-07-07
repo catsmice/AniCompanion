@@ -630,6 +630,8 @@ struct SettingsView: View {
 
                                 liveCaptionModelStatusRow
 
+                                LiveCaptionSessionStatus(controller: appState.liveTranscription)
+
                                 if !screenRecordingGranted {
                                     HStack(spacing: 8) {
                                         Image(systemName: "exclamationmark.triangle.fill")
@@ -1044,6 +1046,44 @@ struct SettingsView: View {
             .pickerStyle(.menu)
             .labelsHidden()
         }
+    }
+}
+
+// MARK: - LiveCaptionSessionStatus
+
+/// Live state of the transcription session (running / downloading / failed), shown right in the
+/// Settings section so a silent failure is visible where the user just enabled the feature.
+/// Reflects the *saved* state — after toggling, it updates on Save.
+private struct LiveCaptionSessionStatus: View {
+
+    @ObservedObject var controller: LiveTranscriptionController
+
+    var body: some View {
+        Group {
+            if let error = controller.lastError {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow.opacity(0.85))
+                    Text(error.localizedDescription)
+                        .foregroundStyle(.red.opacity(0.85))
+                }
+            } else if let progress = controller.modelDownloadProgress {
+                HStack(spacing: 8) {
+                    ProgressView(value: progress).controlSize(.small).frame(width: 90)
+                    Text("Downloading speech model… \(Int(progress * 100))%")
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+            } else if controller.isRunning {
+                HStack(spacing: 8) {
+                    Image(systemName: "waveform")
+                        .foregroundStyle(.green.opacity(0.85))
+                    Text("Live captions are running.")
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+            }
+        }
+        .font(.system(size: 11))
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 

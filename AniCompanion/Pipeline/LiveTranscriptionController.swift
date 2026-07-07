@@ -111,6 +111,11 @@ final class LiveTranscriptionController: ObservableObject {
     /// The most recent start/stream error, for the Settings/overlay UI.
     @Published private(set) var lastError: Error?
 
+    /// Whether the feature is enabled in Settings (mirrors the saved toggle via `apply`).
+    /// Distinct from `isRunning`: enabled-but-not-running means starting, downloading the
+    /// model, or failed — states the UI must surface instead of silently showing nothing.
+    @Published private(set) var isEnabled = false
+
     // MARK: Wiring (set by AppState)
 
     /// Renders captions in the desktop-pet speech bubble.
@@ -171,6 +176,7 @@ final class LiveTranscriptionController: ObservableObject {
     /// Reconcile the running state with the saved settings (called on launch and on Settings
     /// save). Starts, stops, or restarts (language change) as needed.
     func apply(enabled: Bool, locale: Locale) {
+        isEnabled = enabled
         Task { @MainActor [weak self] in
             guard let self else { return }
             let localeChanged = locale.identifier != self.sourceLocale.identifier
@@ -192,6 +198,7 @@ final class LiveTranscriptionController: ObservableObject {
 
         guard capture.hasAccess else {
             lastError = SystemAudioCaptureError.notAuthorized
+            Log.pipeline("[LiveCaption] Start blocked — Screen Recording permission not granted (preflight false)")
             return
         }
 

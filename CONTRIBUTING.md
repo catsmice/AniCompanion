@@ -13,9 +13,10 @@ open AniCompanion.xcodeproj       # build & run in Xcode
 
 See `CLAUDE.md` for architecture notes and `README.md` for first-run setup.
 
-## Testing screen vision (macOS Screen Recording)
+## Testing screen vision & live transcription (macOS Screen Recording)
 
-Screen vision (**Settings → Screen Vision → "Let her see your screen"**, off by default) needs macOS
+Screen vision (**Settings → Screen Vision**) and live transcription (**Settings → Live
+Transcription**) — both off by default — need macOS
 **Screen Recording** permission — macOS prompts on first capture, or you can grant it under **System
 Settings → Privacy & Security → Screen Recording**.
 
@@ -38,6 +39,23 @@ code-signing certificate:
      /path/to/AniCompanion.app   # Xcode → Product → Show Build Folder in Finder
    ```
 3. Grant Screen Recording **once** — it now persists across rebuilds.
+
+**Or let `run-app.sh` do step 2 for you:** put the identity (its name, or its SHA-1 hash from
+`security find-identity -v -p codesigning` — the hash avoids ambiguity if the name isn't unique)
+in a `scripts/dev-signing-identity` file (gitignored). Every `./scripts/run-app.sh` launch then
+re-signs the build automatically before opening it, so the grant can never silently reset:
+```bash
+security find-identity -v -p codesigning          # find your cert's SHA-1 hash
+echo "<SHA1-HASH>" > scripts/dev-signing-identity
+```
+
+Gotcha learned the hard way: if the cert stops appearing in `security find-identity -v` output,
+it is probably NOT gone — trust settings can drop silently (e.g. across macOS updates), and `-v`
+hides untrusted identities. Check `security find-identity -p codesigning` (no `-v`); a
+`CSSMERR_TP_NOT_TRUSTED` entry is repaired with
+`security add-trusted-cert -p codeSign -k ~/Library/Keychains/login.keychain-db <cert.pem>`
+— don't create a new certificate (a new key = a new designated requirement = the existing grant
+is lost and TCC starts over).
 
 This is entirely local; it doesn't touch the project or affect releases.
 
