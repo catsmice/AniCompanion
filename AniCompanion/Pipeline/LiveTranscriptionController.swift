@@ -278,6 +278,22 @@ final class LiveTranscriptionController: ObservableObject {
     /// The rolling translated text (windowed like `finalizedTail`).
     private var translatedTail: String = ""
 
+    // Sentence assembly for translation. Forced finalization (the latency fix) chops speech into
+    // sub-sentence fragments — fine for the caption's live original line, but translators (an LLM
+    // especially) translate *fragments* badly: each fragment becomes a standalone mistranslation
+    // and the concatenation reads broken. So we re-assemble finalized fragments into whole
+    // sentences and translate those. The live original line still updates per-fragment.
+    private var sentenceBuffer: String = ""
+    private var sentenceFlushTask: Task<Void, Never>?
+    /// Flush the buffer to the translator this long after the last fragment (speaker paused →
+    /// sentence is likely complete), even without terminal punctuation (forced finalization
+    /// often cuts before the recognizer emits it).
+    private let sentenceIdleFlush: TimeInterval = 1.1
+    /// Hard cap so a long unpunctuated monologue still translates in reasonable chunks.
+    private let maxSentenceLength = 60
+    /// Sentence terminators across ja/ko/zh/en — a buffer ending in one flushes immediately.
+    private static let sentenceEnders: Set<Character> = ["。", "！", "？", "!", "?", ".", "…", "\n"]
+
     // Transcript context ("watching together")
 
     /// Rolling log of finalized transcript entries (original + translation when available),
@@ -362,6 +378,7 @@ final class LiveTranscriptionController: ObservableObject {
         finalizedTail = ""
         volatileText = ""
         translatedTail = ""
+        sentenceBuffer = ""
         pendingTranslations = []
         transcriptLog = []
 
@@ -424,7 +441,9 @@ final class LiveTranscriptionController: ObservableObject {
     func stop() async {
         sessionGeneration &+= 1 // invalidate in-flight segment callbacks
         idleHideTask?.cancel(); idleHideTask = nil
+        sentenceFlushTask?.cancel(); sentenceFlushTask = nil
         translationWorker?.cancel(); translationWorker = nil
+        sentenceBuffer = ""
         pendingTranslations = []
         translator = nil
         isTranslating = false
@@ -457,7 +476,7 @@ final class LiveTranscriptionController: ObservableObject {
             if !trimmed.isEmpty {
                 finalizedTail += trimmed
                 if translator != nil {
-                    enqueueTranslation(trimmed)
+                    bufferForTranslation(trimmed)
                 } else {
                     appendToTranscriptLog(original: trimmed, translated: nil)
                 }
@@ -486,6 +505,46 @@ final class LiveTranscriptionController: ObservableObject {
             }
         }
         scheduleIdleHide()
+    }
+
+    // MARK: - Sentence assembly (translation input)
+
+    /// Accumulate a finalized fragment; flush the buffer to the translator on a sentence
+    /// terminator, at the length cap, or after a short idle pause. Translating whole sentences
+    /// (not the fragments forced finalization produces) is what keeps quality high — a fragment
+    /// like "今日は" translated alone becomes junk that concatenates badly.
+    private func bufferForTranslation(_ fragment: String) {
+        if !sentenceBuffer.isEmpty, needsSpaceJoin { sentenceBuffer += " " }
+        sentenceBuffer += fragment
+
+        if let last = sentenceBuffer.last, Self.sentenceEnders.contains(last) {
+            flushSentence()
+        } else if sentenceBuffer.count >= maxSentenceLength {
+            flushSentence()
+        } else {
+            scheduleSentenceFlush()
+        }
+    }
+
+    /// Space-join fragments only for space-delimited source languages (en); ja/ko/zh concatenate.
+    private var needsSpaceJoin: Bool { sourceLanguage == .english }
+
+    private func scheduleSentenceFlush() {
+        sentenceFlushTask?.cancel()
+        let gen = sessionGeneration
+        sentenceFlushTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(self?.sentenceIdleFlush ?? 1.1))
+            guard let self, !Task.isCancelled, gen == self.sessionGeneration else { return }
+            self.flushSentence()
+        }
+    }
+
+    private func flushSentence() {
+        sentenceFlushTask?.cancel(); sentenceFlushTask = nil
+        let sentence = sentenceBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+        sentenceBuffer = ""
+        guard !sentence.isEmpty else { return }
+        enqueueTranslation(sentence)
     }
 
     // MARK: - Translation (Phase 2)

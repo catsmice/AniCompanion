@@ -221,6 +221,15 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
   call**, so a slow LLM can't fall ever further behind fast speech; a failed batch shows
   untranslated. Overlay goes dual-line: small dimmed rolling original + translated caption; the
   bubble gets the translated text.
+- **Sentence assembly before translating** (`bufferForTranslation` → `flushSentence`): forced
+  finalization chops speech into sub-sentence *fragments*; translating a fragment (e.g. `今日は`
+  alone → `今天是…`) yields junk that concatenates into broken output — the reason "LLM was worse
+  than Apple" (confirmed via curl: same sentence whole = perfect, in fragments = garbage). So
+  finalized fragments are re-assembled into whole sentences (flush on terminal punctuation, a
+  60-char cap, or a 1.1 s idle pause) and *sentences* are translated. The live dimmed original
+  line still updates per fragment for immediate feedback; only the translation waits for a
+  complete thought. Applies to both engines (Apple tolerated fragments, but sentence-level is
+  better for both).
 - **Transcript context ("watching together")**: the controller keeps a rolling log of finalized
   (original → translation) entries; `recentTranscript()` formats the last ~2 min.
   `ConversationController.transcriptContextProvider` (wired by `AppState`) injects it as a hidden
