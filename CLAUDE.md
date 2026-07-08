@@ -209,14 +209,25 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
   `analyzer.finalize(through: nil)` once it's been stable ≥0.6 s (or ≥2 s old) — the official
   latency-vs-lookahead knob; caption/translation lag drops to ~1–2 s.
 - **Translate mode (Phase 2)**: a **Translate captions** toggle + target language
-  (`LiveCaptionTargetLanguage`: zh-Hant/zh-Hans/en). Each *finalized* segment (volatile partials
-  churn too much) is translated **on-device** via the programmatic
-  `TranslationSession(installedSource:target:)` (macOS 26+; requires the pair's pack installed —
-  checked via `LanguageAvailability`, surfaced in a Settings status row) behind a
-  `CaptionTranslator` seam (LLM fallback can slot in later). A single serial worker drains the
-  segment queue so translations land in order; a failed segment shows untranslated. Overlay goes
-  dual-line: small dimmed rolling original + translated caption; the bubble gets the translated
-  text. If the pack isn't installed, captions degrade to untranslated (non-fatal).
+  (`LiveCaptionTargetLanguage`: zh-Hant/zh-Hans/en) + **Translation engine**
+  (`LiveCaptionTranslatorKind`). Each *finalized* segment (volatile partials churn too much) is
+  translated behind the `CaptionTranslator` seam: **Apple** = programmatic
+  `TranslationSession(installedSource:target:)` (macOS 26+, on-device, needs the pair's pack
+  installed — `LanguageAvailability`, surfaced in a Settings status row); **LLM** =
+  `LLMCaptionTranslator`, a small non-streaming `POST /v1/chat/completions` to the configured
+  agent backend that replays the last few (source → translation) pairs as chat turns, so
+  names/honorifics/terminology stay consistent — context-aware, higher quality, more latency.
+  A single serial worker drains the queue in order and **coalesces everything pending into one
+  call**, so a slow LLM can't fall ever further behind fast speech; a failed batch shows
+  untranslated. Overlay goes dual-line: small dimmed rolling original + translated caption; the
+  bubble gets the translated text.
+- **Transcript context ("watching together")**: the controller keeps a rolling log of finalized
+  (original → translation) entries; `recentTranscript()` formats the last ~2 min.
+  `ConversationController.transcriptContextProvider` (wired by `AppState`) injects it as a hidden
+  **system message just before the user's turn — API payload only, never history** — via
+  `Persona.transcriptContextTemplate` (`{transcript}`; in `proactive.json`, optional + built-in
+  default). So while captions run, the user can ask 小光 about what's playing ("她剛剛說什麼？")
+  and proactive turns are media-aware too.
 - Runtime probe (this Mac, macOS 26.5, 2026-07-07): SpeechTranscriber supports ja/ko/zh/en (ja + ko
   need a one-time model download; zh-TW/en installed); `SFSpeechRecognizer` has **no** on-device
   ja/ko. Apple **Translation** packs ja→zh-Hant and ko→zh-Hant were *already installed*, and the

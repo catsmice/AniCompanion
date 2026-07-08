@@ -62,6 +62,7 @@ struct SettingsView: View {
     @State private var liveCaptionTranslateEnabled: Bool = false
     @State private var liveCaptionTargetLanguage: LiveCaptionTargetLanguage = .traditionalChinese
     @State private var liveCaptionTranslationStatus: LiveCaptionModelStatus?
+    @State private var liveCaptionTranslatorKind: LiveCaptionTranslatorKind = .apple
 
     // Screen vision (default off; opt-in with consent).
     @State private var screenVisionEnabled: Bool = false
@@ -654,7 +655,25 @@ struct SettingsView: View {
                                         .labelsHidden()
                                     }
 
-                                    liveCaptionTranslationStatusRow
+                                    SettingsField(label: "Translation engine") {
+                                        Picker("", selection: $liveCaptionTranslatorKind) {
+                                            ForEach(LiveCaptionTranslatorKind.allCases) { kind in
+                                                Text(kind.displayName).tag(kind)
+                                            }
+                                        }
+                                        .pickerStyle(.menu)
+                                        .labelsHidden()
+                                    }
+
+                                    switch liveCaptionTranslatorKind {
+                                    case .apple:
+                                        liveCaptionTranslationStatusRow
+                                    case .llm:
+                                        Text("Translates through your configured agent backend — context-aware and usually more accurate, but adds latency (and cost if the backend is a paid cloud model). The transcript is sent to that backend.")
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(.white.opacity(0.4))
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
                                 }
 
                                 LiveCaptionSessionStatus(controller: appState.liveTranscription)
@@ -1009,6 +1028,9 @@ struct SettingsView: View {
         liveCaptionTargetLanguage = LiveCaptionTargetLanguage(
             rawValue: appState.liveTranscriptionTargetLanguage
         ) ?? .traditionalChinese
+        liveCaptionTranslatorKind = LiveCaptionTranslatorKind(
+            rawValue: appState.liveTranscriptionTranslator
+        ) ?? .apple
     }
 
     /// Write local state back to AppState for persistence, then reinitialize services.
@@ -1055,6 +1077,7 @@ struct SettingsView: View {
         appState.liveTranscriptionSourceLanguage = liveCaptionSourceLanguage.rawValue
         appState.liveTranscriptionTranslateEnabled = liveCaptionTranslateEnabled
         appState.liveTranscriptionTargetLanguage = liveCaptionTargetLanguage.rawValue
+        appState.liveTranscriptionTranslator = liveCaptionTranslatorKind.rawValue
 
         // Persist the language. The character/persona + STT pick it up immediately on
         // reinitialize; the SwiftUI interface needs `AppleLanguages` + a relaunch.

@@ -66,6 +66,11 @@ final class ConversationController: ObservableObject {
     /// Requires a `screenVisionService` and macOS Screen Recording permission.
     var screenVisionEnabled: Bool = false
 
+    /// Supplies the recent live-transcription transcript ("watching together" context), injected
+    /// as a hidden system message on each turn while captions run — so the user can ask 小光
+    /// about what's playing. Nil / empty result = nothing injected. Set by `AppState`.
+    var transcriptContextProvider: (@MainActor () -> String?)?
+
     // MARK: - Dependencies
 
     private let chatTransport: any ChatTransport
@@ -778,7 +783,19 @@ final class ConversationController: ObservableObject {
 
     /// The core pipeline: send chat via the transport -> parse sentences -> TTS in parallel -> play in order.
     private func runPipeline(suppressSilentResponse: Bool = false) async throws {
-        let contextMessages = buildMessagesWithSystemPrompt()
+        var contextMessages = buildMessagesWithSystemPrompt()
+
+        // "Watching together": while live transcription runs, slip the recent transcript in as a
+        // hidden system message just before the user's turn — API payload only, never history,
+        // so a 20-minute video can't pollute the persisted conversation.
+        if let transcript = transcriptContextProvider?(),
+           !transcript.isEmpty,
+           let lastUserIndex = contextMessages.lastIndex(where: { $0.role == .user }) {
+            let content = persona.transcriptContextTemplate
+                .replacingOccurrences(of: "{transcript}", with: transcript)
+            contextMessages.insert(ChatMessage(role: .system, content: content), at: lastUserIndex)
+        }
+
         let apiMessages = contextMessages.map { $0.apiMessage }
 
         let parser = SentenceParser()

@@ -116,6 +116,10 @@ final class AppState: ObservableObject {
     @AppStorage(LiveCaptionTargetLanguage.storageKey) var liveTranscriptionTargetLanguage: String
         = LiveCaptionTargetLanguage.traditionalChinese.rawValue
 
+    /// Which engine translates captions: Apple Translation (on-device) or the agent backend (LLM).
+    @AppStorage(LiveCaptionTranslatorKind.storageKey) var liveTranscriptionTranslator: String
+        = LiveCaptionTranslatorKind.apple.rawValue
+
     private var effectiveVRMModelFilename: String {
         let filename = vrmModelFilename.trimmingCharacters(in: .whitespacesAndNewlines)
         return filename.isEmpty ? "AliciaSolid.vrm" : filename
@@ -244,6 +248,21 @@ final class AppState: ObservableObject {
         liveTranscription.isCharacterSpeaking = { [weak self] in
             self?.conversationController?.isSpeaking ?? false
         }
+        // The LLM caption translator rides the selected agent backend's connection.
+        liveTranscription.makeLLMTranslator = { source, target in
+            let backend = ChatBackend.current
+            return LLMCaptionTranslator(
+                endpoint: backend.savedEndpoint(),
+                apiKey: backend.savedAPIKey(),
+                model: backend.defaultModel,
+                sourceName: source.promptName,
+                targetName: target.promptName
+            )
+        }
+        // "Watching together": chat turns carry the recent transcript while captions run.
+        controller.transcriptContextProvider = { [weak self] in
+            self?.liveTranscription.recentTranscript()
+        }
         applyLiveTranscriptionSettings()
 
         // Load the configured VRM character model from Resources/VRMModel.
@@ -314,7 +333,8 @@ final class AppState: ObservableObject {
             enabled: liveTranscriptionEnabled,
             source: LiveCaptionSourceLanguage(rawValue: liveTranscriptionSourceLanguage) ?? .japanese,
             translate: liveTranscriptionTranslateEnabled,
-            target: LiveCaptionTargetLanguage(rawValue: liveTranscriptionTargetLanguage) ?? .traditionalChinese
+            target: LiveCaptionTargetLanguage(rawValue: liveTranscriptionTargetLanguage) ?? .traditionalChinese,
+            translator: LiveCaptionTranslatorKind(rawValue: liveTranscriptionTranslator) ?? .apple
         )
     }
 

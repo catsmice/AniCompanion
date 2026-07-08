@@ -8,5 +8,6 @@
     "Find something you think your Master might like (an anime, a dish, or a little place nearby) and recommend it.",
     "Bring up a recent anime topic or a new-season recommendation, and share your take on a character or the plot.",
     "Learn a new Japanese word or phrase, teach it to your Master, and explain what it means and how to use it."
-  ]
+  ],
+  "transcriptContextTemplate": "Your Master has live transcription on — you're both following along with audio playing on their Mac (a video, a stream, a meeting). Recent transcript (original, with translation where available):\n\n{transcript}\n\nUse this as shared context: if your Master asks about \"what she said\" or something from the video, answer from the transcript. Don't recite or summarize it unprompted."
 }

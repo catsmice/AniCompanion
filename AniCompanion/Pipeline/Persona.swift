@@ -13,6 +13,9 @@ struct Persona: Sendable {
     /// Proactive prompt used (instead of an idle task) when screen vision is on: she looks at the
     /// attached screenshot and comments only if it's genuinely worthwhile, else stays quiet.
     let visionGlanceTemplate: String
+    /// Hidden context injected into chat turns while live transcription runs, carrying the
+    /// recent transcript of what's playing so she can be asked about it ({transcript}).
+    let transcriptContextTemplate: String
 
     static func load(language: AppLanguage) -> Persona {
         let systemPrompt = loadText("system_prompt", ext: "txt", language: language)
@@ -28,9 +31,22 @@ struct Persona: Sendable {
             launchGreetingTemplate: proactive.launchGreetingTemplate,
             idlePromptTemplate: proactive.idlePromptTemplate,
             idleTasks: proactive.idleTasks,
-            visionGlanceTemplate: proactive.visionGlanceTemplate ?? Self.defaultVisionGlanceTemplate
+            visionGlanceTemplate: proactive.visionGlanceTemplate ?? Self.defaultVisionGlanceTemplate,
+            transcriptContextTemplate: proactive.transcriptContextTemplate ?? Self.defaultTranscriptContextTemplate
         )
     }
+
+    /// Built-in fallback for the transcript context, used when a `proactive.json` predates the field.
+    static let defaultTranscriptContextTemplate = """
+    Your Master has live transcription on — you're both following along with audio playing on \
+    their Mac (a video, a stream, a meeting). Recent transcript (original, with translation \
+    where available):
+
+    {transcript}
+
+    Use this as shared context: if your Master asks about "what she said" or something from the \
+    video, answer from the transcript. Don't recite or summarize it unprompted.
+    """
 
     /// Built-in fallback for the vision glance, used when a `proactive.json` predates the field.
     static let defaultVisionGlanceTemplate = """
@@ -66,6 +82,7 @@ private struct ProactivePrompts: Decodable {
     let idleTasks: [String]
     /// Optional so older/partial `proactive.json` files still decode; `Persona` supplies a default.
     let visionGlanceTemplate: String?
+    let transcriptContextTemplate: String?
 
     static func load(language: AppLanguage) -> ProactivePrompts? {
         guard let url = Bundle.main.url(
@@ -78,6 +95,7 @@ private struct ProactivePrompts: Decodable {
         launchGreetingTemplate: "Current time: {time}\nThe user just came online. Greet them naturally.",
         idlePromptTemplate: "Current time: {time}\nTask: {task}",
         idleTasks: ["Share something interesting you thought of with the user."],
-        visionGlanceTemplate: nil
+        visionGlanceTemplate: nil,
+        transcriptContextTemplate: nil
     )
 }

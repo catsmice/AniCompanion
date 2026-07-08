@@ -36,6 +36,16 @@ enum LiveCaptionSourceLanguage: String, CaseIterable, Identifiable, Sendable {
     var translationSource: Locale.Language {
         Locale.Language(identifier: Locale(identifier: rawValue).language.languageCode?.identifier ?? rawValue)
     }
+
+    /// English name for LLM translation prompts.
+    var promptName: String {
+        switch self {
+        case .japanese:       return "Japanese"
+        case .korean:         return "Korean"
+        case .mandarinTaiwan: return "Mandarin Chinese"
+        case .english:        return "English"
+        }
+    }
 }
 
 // MARK: - LiveCaptionTargetLanguage
@@ -60,6 +70,35 @@ enum LiveCaptionTargetLanguage: String, CaseIterable, Identifiable, Sendable {
     }
 
     var language: Locale.Language { Locale.Language(identifier: rawValue) }
+
+    /// English name for LLM translation prompts.
+    var promptName: String {
+        switch self {
+        case .traditionalChinese: return "Traditional Chinese (Taiwan)"
+        case .simplifiedChinese:  return "Simplified Chinese"
+        case .english:            return "English"
+        }
+    }
+}
+
+// MARK: - LiveCaptionTranslatorKind
+
+/// Which engine translates captions: Apple Translation (on-device, fast, fixed quality) or the
+/// configured agent backend's LLM (context-aware, most accurate, adds latency + possibly cost).
+enum LiveCaptionTranslatorKind: String, CaseIterable, Identifiable, Sendable {
+    case apple
+    case llm
+
+    var id: String { rawValue }
+
+    static let storageKey = "live_transcription_translator"
+
+    var displayName: LocalizedStringKey {
+        switch self {
+        case .apple: return "Apple Translation (on-device)"
+        case .llm:   return "Agent backend (LLM)"
+        }
+    }
 }
 
 // MARK: - LiveCaptionModelStatus
@@ -211,7 +250,8 @@ final class LiveTranscriptionController: ObservableObject {
     /// Bumped per start so stale segment callbacks from a stopped session are ignored.
     private var sessionGeneration: UInt64 = 0
 
-    /// The locale the current/last session was started with.
+    /// The source language the current/last session was started with (and its locale).
+    private(set) var sourceLanguage: LiveCaptionSourceLanguage = .japanese
     private(set) var sourceLocale: Locale = LiveCaptionSourceLanguage.japanese.locale
 
     // Translation (Phase 2)
@@ -222,12 +262,28 @@ final class LiveTranscriptionController: ObservableObject {
     /// Bare source language for the translator (derived from the source language choice).
     private var translationSource: Locale.Language = LiveCaptionSourceLanguage.japanese.translationSource
 
+    /// Which translation engine to use (Apple on-device vs the agent backend LLM).
+    private(set) var translatorKind: LiveCaptionTranslatorKind = .apple
+
+    /// Builds the LLM translator from the current agent-backend config (set by `AppState` —
+    /// the controller doesn't know about `ChatBackend`).
+    var makeLLMTranslator: (@MainActor (_ source: LiveCaptionSourceLanguage, _ target: LiveCaptionTargetLanguage) -> (any CaptionTranslator)?)?
+
     private var translator: (any CaptionTranslator)?
-    /// Finalized segments awaiting translation, processed strictly in order.
+    /// Finalized segments awaiting translation. The worker drains ALL pending segments per
+    /// iteration (coalescing them into one call), so a slow translator (LLM) can't build an
+    /// ever-growing backlog against fast speech.
     private var pendingTranslations: [String] = []
     private var translationWorker: Task<Void, Never>?
     /// The rolling translated text (windowed like `finalizedTail`).
     private var translatedTail: String = ""
+
+    // Transcript context ("watching together")
+
+    /// Rolling log of finalized transcript entries (original + translation when available),
+    /// consumed by `recentTranscript` to give chat turns context about what's playing.
+    private var transcriptLog: [(time: TimeInterval, original: String, translated: String?)] = []
+    private let transcriptLogLimit = 60
 
     /// Longest caption shown at once (the bubble is small; captions read as a rolling tail).
     private let maxCaptionLength = 72
@@ -264,21 +320,25 @@ final class LiveTranscriptionController: ObservableObject {
         enabled: Bool,
         source: LiveCaptionSourceLanguage,
         translate: Bool,
-        target: LiveCaptionTargetLanguage
+        target: LiveCaptionTargetLanguage,
+        translator: LiveCaptionTranslatorKind
     ) {
         isEnabled = enabled
         Task { @MainActor [weak self] in
             guard let self else { return }
-            let changed = source.locale.identifier != self.sourceLocale.identifier
+            let changed = source != self.sourceLanguage
                 || translate != self.translateEnabled
                 || target != self.targetLanguage
+                || translator != self.translatorKind
             if self.isRunning, !enabled || changed {
                 await self.stop()
             }
+            self.sourceLanguage = source
             self.sourceLocale = source.locale
             self.translationSource = source.translationSource
             self.translateEnabled = translate
             self.targetLanguage = target
+            self.translatorKind = translator
             if enabled, !self.isRunning {
                 await self.start()
             }
@@ -303,14 +363,20 @@ final class LiveTranscriptionController: ObservableObject {
         volatileText = ""
         translatedTail = ""
         pendingTranslations = []
+        transcriptLog = []
 
-        // Attach the translator when asked and the pack is on-device; otherwise degrade to
-        // plain transcription (non-fatal — the Settings status row explains why).
+        // Attach the requested translator; on failure degrade to plain transcription
+        // (non-fatal — the Settings status row explains why).
         translator = nil
         if translateEnabled {
-            translator = await Self.makeTranslator(source: translationSource, target: targetLanguage.language)
+            switch translatorKind {
+            case .apple:
+                translator = await Self.makeTranslator(source: translationSource, target: targetLanguage.language)
+            case .llm:
+                translator = makeLLMTranslator?(sourceLanguage, targetLanguage)
+            }
             if translator == nil {
-                Log.pipeline("[LiveCaption] Translate requested but unavailable (\(translationSource.minimalIdentifier) → \(targetLanguage.rawValue)) — captions stay untranslated")
+                Log.pipeline("[LiveCaption] Translate requested but unavailable (\(translatorKind.rawValue): \(translationSource.minimalIdentifier) → \(targetLanguage.rawValue)) — captions stay untranslated")
             }
         }
         isTranslating = translator != nil
@@ -390,7 +456,11 @@ final class LiveTranscriptionController: ObservableObject {
         if isFinal {
             if !trimmed.isEmpty {
                 finalizedTail += trimmed
-                if translator != nil { enqueueTranslation(trimmed) }
+                if translator != nil {
+                    enqueueTranslation(trimmed)
+                } else {
+                    appendToTranscriptLog(original: trimmed, translated: nil)
+                }
             }
             volatileText = ""
         } else {
@@ -421,7 +491,9 @@ final class LiveTranscriptionController: ObservableObject {
     // MARK: - Translation (Phase 2)
 
     /// Queue a finalized segment and make sure the serial worker is draining — segments must
-    /// translate strictly in order or the tail reads shuffled.
+    /// translate strictly in order or the tail reads shuffled. Each worker iteration drains
+    /// EVERYTHING pending as one call, so a slow translator (an LLM taking a second-plus)
+    /// coalesces a backlog instead of falling ever further behind fast speech.
     private func enqueueTranslation(_ segment: String) {
         pendingTranslations.append(segment)
         guard translationWorker == nil else { return }
@@ -429,16 +501,18 @@ final class LiveTranscriptionController: ObservableObject {
         translationWorker = Task { @MainActor [weak self] in
             while let self, !Task.isCancelled, gen == self.sessionGeneration,
                   !self.pendingTranslations.isEmpty {
-                let segment = self.pendingTranslations.removeFirst()
-                var translated = segment // graceful: a failed segment shows untranslated
+                let batch = self.pendingTranslations.joined(separator: " ")
+                self.pendingTranslations.removeAll()
+                var translated = batch // graceful: a failed batch shows untranslated
                 do {
                     if let translator = self.translator {
-                        translated = try await translator.translate(segment)
+                        translated = try await translator.translate(batch)
                     }
                 } catch {
                     Log.pipeline("[LiveCaption] Translate failed (showing original): \(error.localizedDescription)")
                 }
                 guard gen == self.sessionGeneration else { break }
+                self.appendToTranscriptLog(original: batch, translated: translated)
                 self.appendTranslated(translated)
             }
             self?.translationWorker = nil
@@ -455,6 +529,37 @@ final class LiveTranscriptionController: ObservableObject {
             characterController?.setSpeechText(translatedTail)
         }
         scheduleIdleHide()
+    }
+
+    // MARK: - Transcript context ("watching together")
+
+    private func appendToTranscriptLog(original: String, translated: String?) {
+        transcriptLog.append((ProcessInfo.processInfo.systemUptime, original, translated))
+        if transcriptLog.count > transcriptLogLimit {
+            transcriptLog.removeFirst(transcriptLog.count - transcriptLogLimit)
+        }
+    }
+
+    /// The recent transcript (original → translation) formatted for a chat turn's hidden
+    /// context, so 小光 knows what's been playing when the user asks about it. Nil when not
+    /// running or nothing has been said recently.
+    func recentTranscript(within seconds: TimeInterval = 120, maxChars: Int = 1500) -> String? {
+        guard isRunning else { return nil }
+        let cutoff = ProcessInfo.processInfo.systemUptime - seconds
+        let lines = transcriptLog
+            .filter { $0.time >= cutoff }
+            .map { entry -> String in
+                if let translated = entry.translated, translated != entry.original {
+                    return "\(entry.original)\n→ \(translated)"
+                }
+                return entry.original
+            }
+        guard !lines.isEmpty else { return nil }
+        var text = lines.joined(separator: "\n")
+        if text.count > maxChars {
+            text = "…" + String(text.suffix(maxChars))
+        }
+        return text
     }
 
     /// Build the on-device translator when the language pack is installed; nil otherwise.

@@ -1,6 +1,30 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Translation engine" : {
+      "comment" : "Settings: caption translation engine picker",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "翻譯引擎" } }
+      }
+    },
+    "Apple Translation (on-device)" : {
+      "comment" : "Settings: translation engine option",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Apple 翻譯（裝置端）" } }
+      }
+    },
+    "Agent backend (LLM)" : {
+      "comment" : "Settings: translation engine option",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Agent 後端（LLM）" } }
+      }
+    },
+    "Translates through your configured agent backend — context-aware and usually more accurate, but adds latency (and cost if the backend is a paid cloud model). The transcript is sent to that backend." : {
+      "comment" : "Settings: LLM translation engine hint",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "透過你設定的 agent 後端翻譯——能理解前後文、通常更準確，但延遲較高（若後端是付費雲端模型也會產生費用）。逐字稿會傳送到該後端。" } }
+      }
+    },
     "Translate captions" : {
       "comment" : "Settings: live transcription translate toggle",
       "localizations" : {
