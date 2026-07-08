@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Speech
+import Translation
 // @preconcurrency: engine `feed` paths handle AVAudioPCMBuffer inside @Sendable callbacks
 // (safe — each buffer is a fresh copy owned by the callback). Same pattern as FullDuplexVoiceService.
 @preconcurrency import AVFoundation
@@ -30,6 +31,35 @@ enum LiveCaptionSourceLanguage: String, CaseIterable, Identifiable, Sendable {
     }
 
     var locale: Locale { Locale(identifier: rawValue) }
+
+    /// Bare language for the Translation framework (ja-JP → ja).
+    var translationSource: Locale.Language {
+        Locale.Language(identifier: Locale(identifier: rawValue).language.languageCode?.identifier ?? rawValue)
+    }
+}
+
+// MARK: - LiveCaptionTargetLanguage
+
+/// The language captions are translated *into* (Phase 2). Endonym labels — recognizable
+/// regardless of UI language, like `LiveCaptionSourceLanguage`.
+enum LiveCaptionTargetLanguage: String, CaseIterable, Identifiable, Sendable {
+    case traditionalChinese = "zh-Hant"
+    case simplifiedChinese = "zh-Hans"
+    case english = "en"
+
+    var id: String { rawValue }
+
+    static let storageKey = "live_transcription_target_lang"
+
+    var displayName: String {
+        switch self {
+        case .traditionalChinese: return "繁體中文"
+        case .simplifiedChinese:  return "简体中文"
+        case .english:            return "English"
+        }
+    }
+
+    var language: Locale.Language { Locale.Language(identifier: rawValue) }
 }
 
 // MARK: - LiveCaptionModelStatus
@@ -59,6 +89,37 @@ enum LiveTranscriptionError: LocalizedError {
         case .recognizerUnavailable:
             return String(localized: "The speech recognizer is unavailable right now.")
         }
+    }
+}
+
+// MARK: - CaptionTranslator
+
+/// Translates one finalized caption segment. Seam for the on-device Apple path today and an
+/// LLM fallback later (mirrors the `StreamingTranscriptionEngine` seam).
+@MainActor
+protocol CaptionTranslator: AnyObject {
+    func translate(_ text: String) async throws -> String
+}
+
+/// Apple Translation framework, fully on-device. The programmatic `TranslationSession`
+/// initializer (macOS 26+) requires the language pair's pack to be **already installed**
+/// (`LanguageAvailability.status == .installed`) — check before constructing; a missing pack
+/// surfaces as a throw on `translate`.
+@available(macOS 26.0, *)
+@MainActor
+private final class AppleCaptionTranslator: CaptionTranslator {
+
+    // nonisolated(unsafe): TranslationSession is not Sendable and `translate` is nonisolated
+    // async, so awaiting it "sends" the session out of the main actor. Safe here — the session
+    // is only ever used by the controller's single serial translation worker.
+    nonisolated(unsafe) private let session: TranslationSession
+
+    init(source: Locale.Language, target: Locale.Language) {
+        session = TranslationSession(installedSource: source, target: target)
+    }
+
+    func translate(_ text: String) async throws -> String {
+        try await session.translate(text).targetText
     }
 }
 
@@ -102,8 +163,17 @@ final class LiveTranscriptionController: ObservableObject {
     /// Whether capture + recognition are running.
     @Published private(set) var isRunning = false
 
-    /// The current caption line (finalized tail + live partial), trimmed for display.
+    /// The current caption line, trimmed for display. Transcribe mode: finalized tail + live
+    /// partial of the source speech. Translate mode: the rolling *translated* tail.
     @Published private(set) var captionText: String = ""
+
+    /// Rolling original-language line while translation is active (the live partial keeps
+    /// moving here between translated segments); empty in transcribe-only mode.
+    @Published private(set) var originalText: String = ""
+
+    /// Whether a translator is actually attached to this session (translate toggle on AND the
+    /// language pack was available) — drives the overlay's dual-line layout.
+    @Published private(set) var isTranslating = false
 
     /// One-time speech-model download progress (0…1) while the engine fetches assets; nil otherwise.
     @Published private(set) var modelDownloadProgress: Double?
@@ -144,6 +214,21 @@ final class LiveTranscriptionController: ObservableObject {
     /// The locale the current/last session was started with.
     private(set) var sourceLocale: Locale = LiveCaptionSourceLanguage.japanese.locale
 
+    // Translation (Phase 2)
+
+    /// Saved translate settings (mirrored by `apply`).
+    private(set) var translateEnabled = false
+    private(set) var targetLanguage: LiveCaptionTargetLanguage = .traditionalChinese
+    /// Bare source language for the translator (derived from the source language choice).
+    private var translationSource: Locale.Language = LiveCaptionSourceLanguage.japanese.translationSource
+
+    private var translator: (any CaptionTranslator)?
+    /// Finalized segments awaiting translation, processed strictly in order.
+    private var pendingTranslations: [String] = []
+    private var translationWorker: Task<Void, Never>?
+    /// The rolling translated text (windowed like `finalizedTail`).
+    private var translatedTail: String = ""
+
     /// Longest caption shown at once (the bubble is small; captions read as a rolling tail).
     private let maxCaptionLength = 72
 
@@ -174,16 +259,26 @@ final class LiveTranscriptionController: ObservableObject {
     // MARK: - Apply settings
 
     /// Reconcile the running state with the saved settings (called on launch and on Settings
-    /// save). Starts, stops, or restarts (language change) as needed.
-    func apply(enabled: Bool, locale: Locale) {
+    /// save). Starts, stops, or restarts (any setting change) as needed.
+    func apply(
+        enabled: Bool,
+        source: LiveCaptionSourceLanguage,
+        translate: Bool,
+        target: LiveCaptionTargetLanguage
+    ) {
         isEnabled = enabled
         Task { @MainActor [weak self] in
             guard let self else { return }
-            let localeChanged = locale.identifier != self.sourceLocale.identifier
-            if self.isRunning, !enabled || localeChanged {
+            let changed = source.locale.identifier != self.sourceLocale.identifier
+                || translate != self.translateEnabled
+                || target != self.targetLanguage
+            if self.isRunning, !enabled || changed {
                 await self.stop()
             }
-            self.sourceLocale = locale
+            self.sourceLocale = source.locale
+            self.translationSource = source.translationSource
+            self.translateEnabled = translate
+            self.targetLanguage = target
             if enabled, !self.isRunning {
                 await self.start()
             }
@@ -206,6 +301,19 @@ final class LiveTranscriptionController: ObservableObject {
         let gen = sessionGeneration
         finalizedTail = ""
         volatileText = ""
+        translatedTail = ""
+        pendingTranslations = []
+
+        // Attach the translator when asked and the pack is on-device; otherwise degrade to
+        // plain transcription (non-fatal — the Settings status row explains why).
+        translator = nil
+        if translateEnabled {
+            translator = await Self.makeTranslator(source: translationSource, target: targetLanguage.language)
+            if translator == nil {
+                Log.pipeline("[LiveCaption] Translate requested but unavailable (\(translationSource.minimalIdentifier) → \(targetLanguage.rawValue)) — captions stay untranslated")
+            }
+        }
+        isTranslating = translator != nil
 
         let engine = Self.makeEngine(for: sourceLocale)
         self.engine = engine
@@ -250,6 +358,10 @@ final class LiveTranscriptionController: ObservableObject {
     func stop() async {
         sessionGeneration &+= 1 // invalidate in-flight segment callbacks
         idleHideTask?.cancel(); idleHideTask = nil
+        translationWorker?.cancel(); translationWorker = nil
+        pendingTranslations = []
+        translator = nil
+        isTranslating = false
         await capture.stop()
         if let engine {
             await engine.stop()
@@ -258,6 +370,7 @@ final class LiveTranscriptionController: ObservableObject {
         isRunning = false
         modelDownloadProgress = nil
         captionText = ""
+        originalText = ""
         characterController?.setSpeechText(nil)
         Log.pipeline("[LiveCaption] Stopped")
     }
@@ -267,10 +380,18 @@ final class LiveTranscriptionController: ObservableObject {
     /// Fold a recognition segment into the rolling caption. SpeechTranscriber alternates volatile
     /// partials (refined in place) with finalized chunks; the legacy engine behaves the same via
     /// its per-utterance cycle.
+    ///
+    /// Transcribe mode: the rolling original IS the caption. Translate mode: the rolling
+    /// original goes to the secondary `originalText` line, and each *finalized* segment is
+    /// queued for translation (volatile partials churn too much to translate) — the translated
+    /// tail becomes the caption when each translation lands.
     private func handleSegment(_ text: String, isFinal: Bool) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if isFinal {
-            if !trimmed.isEmpty { finalizedTail += trimmed }
+            if !trimmed.isEmpty {
+                finalizedTail += trimmed
+                if translator != nil { enqueueTranslation(trimmed) }
+            }
             volatileText = ""
         } else {
             volatileText = trimmed
@@ -286,11 +407,73 @@ final class LiveTranscriptionController: ObservableObject {
         }
         guard !display.isEmpty else { return }
 
-        captionText = display
-        if !isCharacterSpeaking() {
-            characterController?.setSpeechText(display)
+        if translator != nil {
+            originalText = display
+        } else {
+            captionText = display
+            if !isCharacterSpeaking() {
+                characterController?.setSpeechText(display)
+            }
         }
         scheduleIdleHide()
+    }
+
+    // MARK: - Translation (Phase 2)
+
+    /// Queue a finalized segment and make sure the serial worker is draining — segments must
+    /// translate strictly in order or the tail reads shuffled.
+    private func enqueueTranslation(_ segment: String) {
+        pendingTranslations.append(segment)
+        guard translationWorker == nil else { return }
+        let gen = sessionGeneration
+        translationWorker = Task { @MainActor [weak self] in
+            while let self, !Task.isCancelled, gen == self.sessionGeneration,
+                  !self.pendingTranslations.isEmpty {
+                let segment = self.pendingTranslations.removeFirst()
+                var translated = segment // graceful: a failed segment shows untranslated
+                do {
+                    if let translator = self.translator {
+                        translated = try await translator.translate(segment)
+                    }
+                } catch {
+                    Log.pipeline("[LiveCaption] Translate failed (showing original): \(error.localizedDescription)")
+                }
+                guard gen == self.sessionGeneration else { break }
+                self.appendTranslated(translated)
+            }
+            self?.translationWorker = nil
+        }
+    }
+
+    private func appendTranslated(_ text: String) {
+        translatedTail += text
+        if translatedTail.count > maxCaptionLength {
+            translatedTail = String(translatedTail.suffix(maxCaptionLength))
+        }
+        captionText = translatedTail
+        if !isCharacterSpeaking() {
+            characterController?.setSpeechText(translatedTail)
+        }
+        scheduleIdleHide()
+    }
+
+    /// Build the on-device translator when the language pack is installed; nil otherwise.
+    private static func makeTranslator(source: Locale.Language, target: Locale.Language) async -> (any CaptionTranslator)? {
+        guard #available(macOS 26.0, *) else { return nil }
+        let status = await LanguageAvailability().status(from: source, to: target)
+        guard status == .installed else { return nil }
+        return AppleCaptionTranslator(source: source, target: target)
+    }
+
+    /// Availability of the on-device translation pack for a pair — drives the Settings row.
+    static func translationStatus(from source: Locale.Language, to target: Locale.Language) async -> LiveCaptionModelStatus {
+        guard #available(macOS 26.0, *) else { return .unsupported }
+        switch await LanguageAvailability().status(from: source, to: target) {
+        case .installed: return .installed
+        case .supported: return .needsDownload
+        case .unsupported: return .unsupported
+        @unknown default: return .unsupported
+        }
     }
 
     /// Hide the caption a few seconds after recognition goes quiet (video paused, silence).
@@ -300,8 +483,10 @@ final class LiveTranscriptionController: ObservableObject {
             try? await Task.sleep(for: .seconds(5))
             guard let self, !Task.isCancelled else { return }
             self.captionText = ""
+            self.originalText = ""
             self.finalizedTail = ""
             self.volatileText = ""
+            self.translatedTail = ""
             if !self.isCharacterSpeaking() {
                 self.characterController?.setSpeechText(nil)
             }

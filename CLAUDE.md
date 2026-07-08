@@ -203,10 +203,20 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
   **Apple-server-based** for languages without on-device support, surfaced in Settings). Source
   language (`LiveCaptionSourceLanguage`: ja-JP / ko-KR / zh-TW / en-US) is independent of the app
   language — you watch a Japanese video while the UI runs in zh-Hant.
+- **Translate mode (Phase 2)**: a **Translate captions** toggle + target language
+  (`LiveCaptionTargetLanguage`: zh-Hant/zh-Hans/en). Each *finalized* segment (volatile partials
+  churn too much) is translated **on-device** via the programmatic
+  `TranslationSession(installedSource:target:)` (macOS 26+; requires the pair's pack installed —
+  checked via `LanguageAvailability`, surfaced in a Settings status row) behind a
+  `CaptionTranslator` seam (LLM fallback can slot in later). A single serial worker drains the
+  segment queue so translations land in order; a failed segment shows untranslated. Overlay goes
+  dual-line: small dimmed rolling original + translated caption; the bubble gets the translated
+  text. If the pack isn't installed, captions degrade to untranslated (non-fatal).
 - Runtime probe (this Mac, macOS 26.5, 2026-07-07): SpeechTranscriber supports ja/ko/zh/en (ja + ko
   need a one-time model download; zh-TW/en installed); `SFSpeechRecognizer` has **no** on-device
-  ja/ko. Apple **Translation** packs ja→zh-Hant and ko→zh-Hant were *already installed* — the Phase 2
-  translate step can be fully on-device via `TranslationSession` (LLM as fallback).
+  ja/ko. Apple **Translation** packs ja→zh-Hant and ko→zh-Hant were *already installed*, and the
+  programmatic `TranslationSession` works from a non-UI context (probed — no SwiftUI
+  `.translationTask` hosting needed on macOS 26).
 
 ### Screen Vision (opt-in, off by default)
 
@@ -269,7 +279,8 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
 - **Live Transcription** *(off by default)* — **Live captions of your Mac's audio** toggle (consent
   alert → Screen Recording permission, shared with vision), **Source language** (ja/ko/zh-TW/en) and
   a live model-availability row (installed on-device / downloads on first use / Apple servers /
-  unsupported). Display-only captions; translate is Phase 2.
+  unsupported), plus **Translate captions** + **Translate to** (zh-Hant/zh-Hans/en) with a
+  translation-pack status row and a live session-status row. Display-only; nothing is spoken.
 
 Desktop Pet mode is not in this panel — toggle it from the 🐾 toolbar button, the **Character**
 menu, or **⌘⇧D**.
@@ -319,10 +330,11 @@ model, with smart
 self-gating proactive glances), live streaming chat UI, 16 emotions, skeletal animation clips,
 proactive idle timer (60 min, or a shorter configurable interval when screen vision is on),
 configurable VRM model (Settings), desktop pet mode (non-activating transparent draggable overlay
-with resize + speech bubble), opt-in **live transcription** Phase 1 (system audio → on-device Apple
-STT → live captions in the pet bubble / a caption overlay; display-only).
+with resize + speech bubble), opt-in **live transcription** (system audio → on-device Apple STT →
+live captions in the pet bubble / a caption overlay, display-only; opt-in **translate mode** —
+on-device Apple Translation per finalized segment, dual-line original + translation).
 
 Not yet done / deferred:
-- Live transcription Phase 2 (translate toggle: Apple `TranslationSession` on-device for ja/ko→zh,
-  LLM fallback) and Phase 3 (opt-in spoken dubbing with capture-gating; per-app capture scope)
+- Live transcription Phase 3 (opt-in spoken dubbing with capture-gating; per-app capture scope;
+  LLM translation fallback for pairs Apple can't do on-device)
 - Cron-scheduled proactive push (needs polling Hermes' jobs API or a delivery adapter)

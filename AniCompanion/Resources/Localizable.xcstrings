@@ -1,6 +1,48 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Translate captions" : {
+      "comment" : "Settings: live transcription translate toggle",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "翻譯字幕" } }
+      }
+    },
+    "Each finished sentence is translated on-device and shown as the caption, with the original in a smaller line." : {
+      "comment" : "Settings: translate hint",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "每句完成後會在裝置上翻譯並顯示為字幕，原文以較小字顯示。" } }
+      }
+    },
+    "Translate to" : {
+      "comment" : "Settings: translation target language",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "翻譯成" } }
+      }
+    },
+    "Translation pack installed — translates on-device." : {
+      "comment" : "Settings: translation pack status",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "已安裝翻譯語言包——在裝置上翻譯。" } }
+      }
+    },
+    "Translation pack not downloaded — add it in System Settings → General → Language & Region → Translation Languages." : {
+      "comment" : "Settings: translation pack status",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "尚未下載翻譯語言包——請在「系統設定 → 一般 → 語言與地區 → 翻譯語言」加入。" } }
+      }
+    },
+    "This language pair can't be translated on-device on this Mac — captions will stay untranslated." : {
+      "comment" : "Settings: translation pack status",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "這台 Mac 無法在裝置上翻譯此語言組合——字幕將維持原文。" } }
+      }
+    },
+    "Checking translation availability…" : {
+      "comment" : "Settings: translation pack status",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "正在檢查翻譯可用性…" } }
+      }
+    },
     "Starting live captions…" : {
       "comment" : "Live captions: overlay while session starts",
       "localizations" : {

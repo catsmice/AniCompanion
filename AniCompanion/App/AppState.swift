@@ -108,6 +108,14 @@ final class AppState: ObservableObject {
     @AppStorage(LiveCaptionSourceLanguage.storageKey) var liveTranscriptionSourceLanguage: String
         = LiveCaptionSourceLanguage.japanese.rawValue
 
+    /// Whether captions are translated (Phase 2) — on-device Apple Translation when the pack
+    /// for the pair is installed; otherwise captions stay in the source language.
+    @AppStorage("live_transcription_translate_enabled") var liveTranscriptionTranslateEnabled: Bool = false
+
+    /// The language captions are translated into.
+    @AppStorage(LiveCaptionTargetLanguage.storageKey) var liveTranscriptionTargetLanguage: String
+        = LiveCaptionTargetLanguage.traditionalChinese.rawValue
+
     private var effectiveVRMModelFilename: String {
         let filename = vrmModelFilename.trimmingCharacters(in: .whitespacesAndNewlines)
         return filename.isEmpty ? "AliciaSolid.vrm" : filename
@@ -302,8 +310,12 @@ final class AppState: ObservableObject {
 
     /// Reconcile the live-transcription session with the saved settings (start/stop/restart).
     func applyLiveTranscriptionSettings() {
-        let language = LiveCaptionSourceLanguage(rawValue: liveTranscriptionSourceLanguage) ?? .japanese
-        liveTranscription.apply(enabled: liveTranscriptionEnabled, locale: language.locale)
+        liveTranscription.apply(
+            enabled: liveTranscriptionEnabled,
+            source: LiveCaptionSourceLanguage(rawValue: liveTranscriptionSourceLanguage) ?? .japanese,
+            translate: liveTranscriptionTranslateEnabled,
+            target: LiveCaptionTargetLanguage(rawValue: liveTranscriptionTargetLanguage) ?? .traditionalChinese
+        )
     }
 
     /// Tears down existing services and recreates them with current settings.

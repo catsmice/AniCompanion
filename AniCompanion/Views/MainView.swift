@@ -138,18 +138,30 @@ private struct LiveCaptionOverlay: View {
                 .frame(maxWidth: 420)
                 .fixedSize(horizontal: false, vertical: true)
 
-                if !controller.captionText.isEmpty {
-                    Text(controller.captionText)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.white)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(Color.black.opacity(0.6))
-                        )
-                        .transition(.opacity)
+                if !controller.captionText.isEmpty || (controller.isTranslating && !controller.originalText.isEmpty) {
+                    VStack(spacing: 3) {
+                        // Translate mode: the live original runs in a smaller dimmed line while
+                        // each finished sentence lands below as the translated caption.
+                        if controller.isTranslating && !controller.originalText.isEmpty {
+                            Text(controller.originalText)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.white.opacity(0.55))
+                                .multilineTextAlignment(.center)
+                        }
+                        if !controller.captionText.isEmpty {
+                            Text(controller.captionText)
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(.white)
+                                .multilineTextAlignment(.center)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.black.opacity(0.6))
+                    )
+                    .transition(.opacity)
                 }
             }
             .padding(.bottom, 18)

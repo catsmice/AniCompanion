@@ -59,6 +59,9 @@ struct SettingsView: View {
     @State private var liveCaptionSourceLanguage: LiveCaptionSourceLanguage = .japanese
     @State private var showLiveCaptionConsent = false
     @State private var liveCaptionModelStatus: LiveCaptionModelStatus?
+    @State private var liveCaptionTranslateEnabled: Bool = false
+    @State private var liveCaptionTargetLanguage: LiveCaptionTargetLanguage = .traditionalChinese
+    @State private var liveCaptionTranslationStatus: LiveCaptionModelStatus?
 
     // Screen vision (default off; opt-in with consent).
     @State private var screenVisionEnabled: Bool = false
@@ -630,6 +633,30 @@ struct SettingsView: View {
 
                                 liveCaptionModelStatusRow
 
+                                Divider().background(Color.white.opacity(0.08))
+
+                                Toggle("Translate captions", isOn: $liveCaptionTranslateEnabled)
+                                    .toggleStyle(.switch)
+
+                                Text("Each finished sentence is translated on-device and shown as the caption, with the original in a smaller line.")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.white.opacity(0.4))
+                                    .fixedSize(horizontal: false, vertical: true)
+
+                                if liveCaptionTranslateEnabled {
+                                    SettingsField(label: "Translate to") {
+                                        Picker("", selection: $liveCaptionTargetLanguage) {
+                                            ForEach(LiveCaptionTargetLanguage.allCases) { lang in
+                                                Text(lang.displayName).tag(lang)
+                                            }
+                                        }
+                                        .pickerStyle(.menu)
+                                        .labelsHidden()
+                                    }
+
+                                    liveCaptionTranslationStatusRow
+                                }
+
                                 LiveCaptionSessionStatus(controller: appState.liveTranscription)
 
                                 if !screenRecordingGranted {
@@ -856,6 +883,39 @@ struct SettingsView: View {
         }
     }
 
+    /// Availability of the on-device translation pack for the selected pair.
+    @ViewBuilder
+    private var liveCaptionTranslationStatusRow: some View {
+        HStack(spacing: 8) {
+            switch liveCaptionTranslationStatus {
+            case .installed:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green.opacity(0.85))
+                Text("Translation pack installed — translates on-device.")
+            case .needsDownload:
+                Image(systemName: "arrow.down.circle")
+                    .foregroundStyle(.blue.opacity(0.85))
+                Text("Translation pack not downloaded — add it in System Settings → General → Language & Region → Translation Languages.")
+            case .appleServer, .unsupported:
+                Image(systemName: "xmark.circle")
+                    .foregroundStyle(.red.opacity(0.85))
+                Text("This language pair can't be translated on-device on this Mac — captions will stay untranslated.")
+            case nil:
+                ProgressView().controlSize(.mini)
+                Text("Checking translation availability…")
+            }
+        }
+        .font(.system(size: 11))
+        .foregroundStyle(.white.opacity(0.6))
+        .fixedSize(horizontal: false, vertical: true)
+        .task(id: "\(liveCaptionSourceLanguage.rawValue)→\(liveCaptionTargetLanguage.rawValue)") {
+            let source = liveCaptionSourceLanguage.translationSource
+            let target = liveCaptionTargetLanguage.language
+            liveCaptionTranslationStatus = nil
+            liveCaptionTranslationStatus = await LiveTranscriptionController.translationStatus(from: source, to: target)
+        }
+    }
+
     // MARK: - Screen Vision
 
     /// Called after the user confirms the consent alert: request macOS Screen Recording permission.
@@ -945,6 +1005,10 @@ struct SettingsView: View {
         liveCaptionSourceLanguage = LiveCaptionSourceLanguage(
             rawValue: appState.liveTranscriptionSourceLanguage
         ) ?? .japanese
+        liveCaptionTranslateEnabled = appState.liveTranscriptionTranslateEnabled
+        liveCaptionTargetLanguage = LiveCaptionTargetLanguage(
+            rawValue: appState.liveTranscriptionTargetLanguage
+        ) ?? .traditionalChinese
     }
 
     /// Write local state back to AppState for persistence, then reinitialize services.
@@ -989,6 +1053,8 @@ struct SettingsView: View {
         appState.visionProactiveIntervalMinutes = visionProactiveIntervalMinutes
         appState.liveTranscriptionEnabled = liveTranscriptionEnabled
         appState.liveTranscriptionSourceLanguage = liveCaptionSourceLanguage.rawValue
+        appState.liveTranscriptionTranslateEnabled = liveCaptionTranslateEnabled
+        appState.liveTranscriptionTargetLanguage = liveCaptionTargetLanguage.rawValue
 
         // Persist the language. The character/persona + STT pick it up immediately on
         // reinitialize; the SwiftUI interface needs `AppleLanguages` + a relaunch.
