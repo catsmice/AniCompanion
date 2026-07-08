@@ -203,6 +203,11 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
   **Apple-server-based** for languages without on-device support, surfaced in Settings). Source
   language (`LiveCaptionSourceLanguage`: ja-JP / ko-KR / zh-TW / en-US) is independent of the app
   language — you watch a Japanese video while the UI runs in zh-Hant.
+- **Latency — forced finalization**: left alone, SpeechTranscriber finalizes lazily (waits for a
+  long pause), so finalized-segment consumers (the translator especially) trailed the audio by
+  many seconds. `TranscriberEngine` polls the volatile hypothesis and calls
+  `analyzer.finalize(through: nil)` once it's been stable ≥0.6 s (or ≥2 s old) — the official
+  latency-vs-lookahead knob; caption/translation lag drops to ~1–2 s.
 - **Translate mode (Phase 2)**: a **Translate captions** toggle + target language
   (`LiveCaptionTargetLanguage`: zh-Hant/zh-Hans/en). Each *finalized* segment (volatile partials
   churn too much) is translated **on-device** via the programmatic

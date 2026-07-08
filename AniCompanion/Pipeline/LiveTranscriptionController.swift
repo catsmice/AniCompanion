@@ -513,12 +513,28 @@ private final class TranscriberEngine: StreamingTranscriptionEngine, @unchecked 
 
     private var analyzer: SpeechAnalyzer?
     private var resultsTask: Task<Void, Never>?
+    private var finalizeTask: Task<Void, Never>?
 
     /// Guards the members the capture-queue `feed` touches.
     private let lock = NSLock()
     private var inputContinuation: AsyncStream<AnalyzerInput>.Continuation?
     private var analyzerFormat: AVAudioFormat?
     private var converter: AVAudioConverter?
+
+    // Forced-finalization state (guarded by `lock`; written by the results task, read by the
+    // finalize loop). Left alone, the transcriber finalizes lazily — waiting for a long pause —
+    // which is what made captions (and especially translations, which only consume *finalized*
+    // segments) trail the audio by several seconds.
+    private var pendingVolatile = false
+    private var lastVolatileText = ""
+    private var volatileSince: TimeInterval = 0
+    private var volatileStableSince: TimeInterval = 0
+
+    /// Force-finalize once the hypothesis has stopped changing for this long…
+    private let stabilityThreshold: TimeInterval = 0.6
+    /// …or unconditionally once the oldest unfinalized words are this old (keeps long
+    /// uninterrupted speech flowing instead of pooling in one giant volatile segment).
+    private let maxVolatileAge: TimeInterval = 2.0
 
     @MainActor
     func start(
@@ -566,15 +582,68 @@ private final class TranscriberEngine: StreamingTranscriptionEngine, @unchecked 
 
         try await analyzer.start(inputSequence: stream)
 
-        resultsTask = Task {
+        resultsTask = Task { [weak self] in
             do {
                 for try await result in transcriber.results {
-                    onSegment(String(result.text.characters), result.isFinal)
+                    let text = String(result.text.characters)
+                    self?.trackVolatile(text: text, isFinal: result.isFinal)
+                    onSegment(text, result.isFinal)
                 }
             } catch is CancellationError {
                 // Session torn down.
             } catch {
                 Log.pipeline("[LiveCaption] Transcriber results ended: \(error.localizedDescription)")
+            }
+        }
+
+        startFinalizeLoop(analyzer: analyzer)
+    }
+
+    // MARK: Forced finalization (latency control)
+
+    /// Record volatile-hypothesis churn so the finalize loop knows when speech has settled.
+    private func trackVolatile(text: String, isFinal: Bool) {
+        let now = ProcessInfo.processInfo.systemUptime
+        lock.lock(); defer { lock.unlock() }
+        if isFinal {
+            pendingVolatile = false
+            lastVolatileText = ""
+            return
+        }
+        guard !text.isEmpty else { return }
+        if !pendingVolatile {
+            pendingVolatile = true
+            volatileSince = now
+        }
+        if text != lastVolatileText {
+            lastVolatileText = text
+            volatileStableSince = now
+        }
+    }
+
+    /// Poll for a settled (or stale) hypothesis and ask the analyzer to finalize it, instead of
+    /// waiting for the transcriber's own (much later) pause detection. Trades a little accuracy
+    /// (no long lookahead) for captions that keep pace with the audio — this is what feeds the
+    /// translator promptly, since it only consumes finalized segments.
+    private func startFinalizeLoop(analyzer: SpeechAnalyzer) {
+        finalizeTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard let self else { return }
+                let now = ProcessInfo.processInfo.systemUptime
+                let due = self.lock.withLock {
+                    let due = self.pendingVolatile
+                        && (now - self.volatileStableSince >= self.stabilityThreshold
+                            || now - self.volatileSince >= self.maxVolatileAge)
+                    if due { self.pendingVolatile = false } // don't re-trigger while finalizing
+                    return due
+                }
+                guard due else { continue }
+                do {
+                    try await analyzer.finalize(through: nil)
+                } catch {
+                    Log.pipeline("[LiveCaption] finalize(through:) failed: \(error.localizedDescription)")
+                }
             }
         }
     }
@@ -620,6 +689,8 @@ private final class TranscriberEngine: StreamingTranscriptionEngine, @unchecked 
             converter = nil
         }
 
+        finalizeTask?.cancel()
+        finalizeTask = nil
         if let analyzer {
             try? await analyzer.finalizeAndFinishThroughEndOfInput()
         }
