@@ -285,10 +285,19 @@ final class LiveTranscriptionController: ObservableObject {
     // sentences and translate those. The live original line still updates per-fragment.
     private var sentenceBuffer: String = ""
     private var sentenceFlushTask: Task<Void, Never>?
+    /// When the current buffer started accumulating (bounds total wait — see `maxSentenceWait`).
+    private var sentenceBufferSince: TimeInterval = 0
     /// Flush the buffer to the translator this long after the last fragment (speaker paused →
     /// sentence is likely complete), even without terminal punctuation (forced finalization
     /// often cuts before the recognizer emits it).
     private let sentenceIdleFlush: TimeInterval = 1.1
+    /// On idle, only flush an unpunctuated buffer if it's at least this long. A shorter buffer is
+    /// treated as a mid-sentence pause (a fragment) and waits for the rest instead of translating
+    /// a broken half-sentence — the fix for cases like "こういう質" → "這種質…".
+    private let minIdleFlushLength = 8
+    /// Absolute ceiling on how long a fragment may wait for its sentence to continue, so a buffer
+    /// that never gets more input (speech ended) still flushes rather than hanging.
+    private let maxSentenceWait: TimeInterval = 2.6
     /// Hard cap so a long unpunctuated monologue still translates in reasonable chunks.
     private let maxSentenceLength = 60
     /// Sentence terminators across ja/ko/zh/en — a buffer ending in one flushes immediately.
@@ -514,6 +523,7 @@ final class LiveTranscriptionController: ObservableObject {
     /// (not the fragments forced finalization produces) is what keeps quality high — a fragment
     /// like "今日は" translated alone becomes junk that concatenates badly.
     private func bufferForTranslation(_ fragment: String) {
+        if sentenceBuffer.isEmpty { sentenceBufferSince = ProcessInfo.processInfo.systemUptime }
         if !sentenceBuffer.isEmpty, needsSpaceJoin { sentenceBuffer += " " }
         sentenceBuffer += fragment
 
@@ -535,7 +545,22 @@ final class LiveTranscriptionController: ObservableObject {
         sentenceFlushTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(self?.sentenceIdleFlush ?? 1.1))
             guard let self, !Task.isCancelled, gen == self.sessionGeneration else { return }
-            self.flushSentence()
+            self.onIdleFlush()
+        }
+    }
+
+    /// Idle timer fired. Flush only if the buffer looks like a translatable unit — ended in
+    /// punctuation, long enough, or waited out the ceiling. A short unpunctuated buffer is a
+    /// mid-sentence pause: wait for the rest instead of translating a fragment.
+    private func onIdleFlush() {
+        let trimmed = sentenceBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let ended = trimmed.last.map { Self.sentenceEnders.contains($0) } ?? false
+        let agedOut = ProcessInfo.processInfo.systemUptime - sentenceBufferSince >= maxSentenceWait
+        if ended || trimmed.count >= minIdleFlushLength || agedOut {
+            flushSentence()
+        } else {
+            scheduleSentenceFlush() // still a fragment — keep waiting for the sentence to continue
         }
     }
 

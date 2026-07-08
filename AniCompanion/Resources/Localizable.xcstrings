@@ -1,6 +1,12 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Hands-free voice mode pauses while live captions run, so she doesn't listen to and reply to what you're watching." : {
+      "comment" : "Settings: live transcription vs hands-free note",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "即時字幕執行時，免持語音模式會暫停，這樣她就不會聆聽並回應你正在看的內容。" } }
+      }
+    },
     "Translation engine" : {
       "comment" : "Settings: caption translation engine picker",
       "localizations" : {

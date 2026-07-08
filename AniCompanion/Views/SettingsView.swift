@@ -634,6 +634,17 @@ struct SettingsView: View {
 
                                 liveCaptionModelStatusRow
 
+                                if voiceHandsFreeEnabled {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "info.circle")
+                                            .foregroundStyle(.white.opacity(0.5))
+                                        Text("Hands-free voice mode pauses while live captions run, so she doesn't listen to and reply to what you're watching.")
+                                    }
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.white.opacity(0.5))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                }
+
                                 Divider().background(Color.white.opacity(0.08))
 
                                 Toggle("Translate captions", isOn: $liveCaptionTranslateEnabled)

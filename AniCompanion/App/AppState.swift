@@ -165,6 +165,9 @@ final class AppState: ObservableObject {
     /// Subscription for observing the chat transport's connection state.
     private var connectionCancellable: AnyCancellable?
 
+    /// Subscription that suspends/restores hands-free voice mode as live transcription starts/stops.
+    private var liveCaptionRunningCancellable: AnyCancellable?
+
     // MARK: - Initialization
 
     init() {
@@ -236,8 +239,9 @@ final class AppState: ObservableObject {
         controller.ttsEnabled = ttsEnabled
         controller.screenVisionEnabled = screenVisionEnabled
         controller.visionProactiveIntervalSeconds = Double(visionProactiveIntervalMinutes * 60)
-        controller.configureVoiceMode(handsFree: voiceHandsFreeEnabled, fullDuplex: voiceFullDuplexEnabled)
         conversationController = controller
+        // Apply voice mode, honoring live-transcription mutual exclusivity (below).
+        applyVoiceMode(liveCaptionRunning: liveTranscription.isRunning)
 
         // Verify gateway reachability (HTTP health check).
         ws.connect()
@@ -263,6 +267,18 @@ final class AppState: ObservableObject {
         controller.transcriptContextProvider = { [weak self] in
             self?.liveTranscription.recentTranscript()
         }
+
+        // Live transcription and hands-free voice conversation both want the mic and both drive
+        // audio, so they can't run together (she'd hear the video, respond, and VPIO would duck
+        // it). While captions run, force voice mode off; restore the saved setting when they stop.
+        // `$isRunning` fires in willSet, so react to the emitted value, not a re-read.
+        liveCaptionRunningCancellable = liveTranscription.$isRunning
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] running in
+                self?.applyVoiceMode(liveCaptionRunning: running)
+            }
+
         applyLiveTranscriptionSettings()
 
         // Load the configured VRM character model from Resources/VRMModel.
@@ -325,6 +341,16 @@ final class AppState: ObservableObject {
                 speed: openAITTSSpeed
             )
         }
+    }
+
+    /// Apply the saved hands-free / full-duplex voice settings, but force both OFF while live
+    /// transcription is running — the two compete for the mic and audio device. Called on launch,
+    /// on Settings save, and whenever `liveTranscription.isRunning` flips.
+    func applyVoiceMode(liveCaptionRunning: Bool) {
+        conversationController?.configureVoiceMode(
+            handsFree: liveCaptionRunning ? false : voiceHandsFreeEnabled,
+            fullDuplex: liveCaptionRunning ? false : voiceFullDuplexEnabled
+        )
     }
 
     /// Reconcile the live-transcription session with the saved settings (start/stop/restart).

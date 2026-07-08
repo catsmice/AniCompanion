@@ -226,10 +226,19 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
   alone → `今天是…`) yields junk that concatenates into broken output — the reason "LLM was worse
   than Apple" (confirmed via curl: same sentence whole = perfect, in fragments = garbage). So
   finalized fragments are re-assembled into whole sentences (flush on terminal punctuation, a
-  60-char cap, or a 1.1 s idle pause) and *sentences* are translated. The live dimmed original
+  60-char cap, or an idle pause) and *sentences* are translated. The live dimmed original
   line still updates per fragment for immediate feedback; only the translation waits for a
   complete thought. Applies to both engines (Apple tolerated fragments, but sentence-level is
-  better for both).
+  better for both). **Smart idle flush** (`onIdleFlush`): the 1.1 s idle timer only flushes if the
+  buffer ended in punctuation, is ≥8 chars, or hit a 2.6 s ceiling; a short unpunctuated buffer is
+  a mid-sentence pause (e.g. `こういう質`) and waits for the rest rather than translating a
+  half-word. Adds latency *only* to short mid-pause fragments, never to completed/long sentences.
+- **Live transcription ⟂ hands-free voice** (mutual exclusivity): both want the mic + drive audio,
+  so running together makes her hear the video and reply (and VPIO ducks the video). `AppState`
+  observes `liveTranscription.$isRunning` and routes voice config through `applyVoiceMode(...)`,
+  which forces hands-free/full-duplex **off while captions run** and restores the saved setting
+  when they stop. (Diagnosed from an on-device log capture: 23 mic-STT restarts + 2 unwanted TTS
+  replies during a video.) Settings shows a note when both are enabled.
 - **Transcript context ("watching together")**: the controller keeps a rolling log of finalized
   (original → translation) entries; `recentTranscript()` formats the last ~2 min.
   `ConversationController.transcriptContextProvider` (wired by `AppState`) injects it as a hidden
