@@ -250,6 +250,12 @@ final class LiveTranscriptionController: ObservableObject {
     /// Bumped per start so stale segment callbacks from a stopped session are ignored.
     private var sessionGeneration: UInt64 = 0
 
+    /// The in-flight reconcile (`apply`) work. `apply` chains each new reconcile onto this so
+    /// start/stop can never interleave — `start()` sets `isRunning` only after several `await`s
+    /// (engine start, first-run model download, capture start), so without serialization two
+    /// `apply` calls in that window would both pass the `!isRunning` guard and start two streams.
+    private var reconcileTask: Task<Void, Never>?
+
     /// The source language the current/last session was started with (and its locale).
     private(set) var sourceLanguage: LiveCaptionSourceLanguage = .japanese
     private(set) var sourceLocale: Locale = LiveCaptionSourceLanguage.japanese.locale
@@ -313,13 +319,6 @@ final class LiveTranscriptionController: ObservableObject {
     /// Longest caption shown at once (the bubble is small; captions read as a rolling tail).
     private let maxCaptionLength = 72
 
-    // MARK: - Permission (delegated to the capture service)
-
-    var hasAccess: Bool { capture.hasAccess }
-
-    @discardableResult
-    func requestAccess() -> Bool { capture.requestAccess() }
-
     // MARK: - Model status (Settings)
 
     /// On-device model availability for a source language (drives the Settings status row).
@@ -349,7 +348,10 @@ final class LiveTranscriptionController: ObservableObject {
         translator: LiveCaptionTranslatorKind
     ) {
         isEnabled = enabled
-        Task { @MainActor [weak self] in
+        // Serialize onto the previous reconcile so start/stop never interleave (see `reconcileTask`).
+        let previous = reconcileTask
+        reconcileTask = Task { @MainActor [weak self] in
+            await previous?.value
             guard let self else { return }
             let changed = source != self.sourceLanguage
                 || translate != self.translateEnabled
@@ -483,6 +485,7 @@ final class LiveTranscriptionController: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if isFinal {
             if !trimmed.isEmpty {
+                if !finalizedTail.isEmpty, needsSpaceJoin { finalizedTail += " " }
                 finalizedTail += trimmed
                 if translator != nil {
                     bufferForTranslation(trimmed)
@@ -974,12 +977,18 @@ private final class LegacyRecognizerEngine: NSObject, StreamingTranscriptionEngi
 
     @MainActor
     private func recycle(delay: Duration) {
+        // Bump the generation NOW so any further callbacks from the dying request are ignored —
+        // otherwise a burst of error callbacks (e.g. a flaky server on the macOS-15 path) would
+        // each schedule their own delayed `startCycle`, briefly stacking several requests.
+        generation &+= 1
+        let gen = generation
         recognitionTask?.cancel()
         recognitionTask = nil
         lock.lock(); request = nil; lock.unlock()
         Task { @MainActor [weak self] in
             if delay > .zero { try? await Task.sleep(for: delay) }
-            self?.startCycle()
+            guard let self, self.running, gen == self.generation else { return }
+            self.startCycle()
         }
     }
 

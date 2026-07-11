@@ -164,7 +164,11 @@ private final class AudioStreamOutput: NSObject, SCStreamOutput, SCStreamDelegat
     }
 
     /// Deep-copy a CMSampleBuffer's PCM data into a standalone AVAudioPCMBuffer (the sample
-    /// buffer's backing memory is only valid for the duration of the callback).
+    /// buffer's backing memory is only valid for the duration of the callback), downmixed to mono.
+    ///
+    /// `channelCount = 1` on the stream config is only a *hint* — SCK often delivers stereo anyway.
+    /// The macOS-15 `SFSpeechRecognizer` path needs mono (a multi-channel buffer yields a permanent
+    /// "no speech" err 1110, the same trap documented for VPIO), so we guarantee mono here.
     private static func makePCMBuffer(from sampleBuffer: CMSampleBuffer) -> AVAudioPCMBuffer? {
         guard let formatDescription = sampleBuffer.formatDescription,
               var asbd = formatDescription.audioStreamBasicDescription,
@@ -180,6 +184,29 @@ private final class AudioStreamOutput: NSObject, SCStreamOutput, SCStreamDelegat
             sampleBuffer, at: 0, frameCount: Int32(frames), into: buffer.mutableAudioBufferList
         )
         guard status == noErr else { return nil }
-        return buffer
+        return buffer.format.channelCount > 1 ? (downmixToMono(buffer) ?? buffer) : buffer
+    }
+
+    /// Average a multi-channel (deinterleaved float) buffer into a fresh mono buffer. Returns the
+    /// original untouched for any layout we can't fold (e.g. interleaved/integer) — best effort.
+    private static func downmixToMono(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        let channels = Int(buffer.format.channelCount)
+        guard channels > 1, let src = buffer.floatChannelData else { return buffer }
+        guard let monoFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32,
+                                             sampleRate: buffer.format.sampleRate,
+                                             channels: 1, interleaved: false),
+              let mono = AVAudioPCMBuffer(pcmFormat: monoFormat, frameCapacity: buffer.frameCapacity) else {
+            return buffer
+        }
+        mono.frameLength = buffer.frameLength
+        let dst = mono.floatChannelData![0]
+        let frames = Int(buffer.frameLength)
+        let scale = 1.0 / Float(channels)
+        for f in 0..<frames {
+            var sum: Float = 0
+            for c in 0..<channels { sum += src[c][f] }
+            dst[f] = sum * scale
+        }
+        return mono
     }
 }

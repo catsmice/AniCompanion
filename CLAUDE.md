@@ -191,7 +191,7 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
   `CMSampleBuffer` (`CMSampleBufferCopyPCMDataIntoAudioBufferList`) — the callback's backing memory
   isn't valid after return.
 - **LiveTranscriptionController** (@MainActor; `AppState.liveTranscription`, long-lived — a Settings
-  save/`reinitializeServices()` doesn't cut a running session; `apply(enabled:locale:)` reconciles):
+  save/`reinitializeServices()` doesn't cut a running session; `apply(enabled:source:translate:target:translator:)` reconciles, serialized so start/stop never overlap):
   SCK audio → `StreamingTranscriptionEngine` → rolling caption (finalized tail + volatile partial,
   ~72-char window, auto-hide after 5 s of silence). **Display-only** (Phase 1): captions go to the
   pet speech bubble (`setSpeechText`, deferring while `isCharacterSpeaking`) and a caption overlay in

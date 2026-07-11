@@ -10,9 +10,9 @@ import os
 ///   `log stream --predicate 'subsystem == "com.anicompanion.app"'`
 ///
 /// Messages are passed as plain `String`s (built eagerly at the call site, like `print`).
-/// **Do not interpolate user content** (recognized speech, model output) into a log message —
-/// log a shape instead (e.g. character count). The two pipeline sites that handle such content
-/// already do this.
+/// **Do not interpolate user content** (recognized speech, model output, captions) into a log
+/// message — log a shape instead (e.g. character count). The pipeline sites that handle such
+/// content already do this.
 enum Log {
     private static let subsystem = "com.anicompanion.app"
 

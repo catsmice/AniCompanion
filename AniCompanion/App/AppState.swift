@@ -252,13 +252,14 @@ final class AppState: ObservableObject {
         liveTranscription.isCharacterSpeaking = { [weak self] in
             self?.conversationController?.isSpeaking ?? false
         }
-        // The LLM caption translator rides the selected agent backend's connection.
+        // The LLM caption translator rides the selected agent backend's connection, read lazily
+        // per translation so a mid-session backend change from Settings takes effect immediately.
         liveTranscription.makeLLMTranslator = { source, target in
-            let backend = ChatBackend.current
-            return LLMCaptionTranslator(
-                endpoint: backend.savedEndpoint(),
-                apiKey: backend.savedAPIKey(),
-                model: backend.defaultModel,
+            LLMCaptionTranslator(
+                connection: {
+                    let backend = ChatBackend.current
+                    return (backend.savedEndpoint(), backend.savedAPIKey(), backend.defaultModel)
+                },
                 sourceName: source.promptName,
                 targetName: target.promptName
             )
@@ -272,7 +273,10 @@ final class AppState: ObservableObject {
         // audio, so they can't run together (she'd hear the video, respond, and VPIO would duck
         // it). While captions run, force voice mode off; restore the saved setting when they stop.
         // `$isRunning` fires in willSet, so react to the emitted value, not a re-read.
+        // `.dropFirst()` skips the initial replay — the current state is already applied
+        // synchronously by the `applyVoiceMode(...)` call above.
         liveCaptionRunningCancellable = liveTranscription.$isRunning
+            .dropFirst()
             .removeDuplicates()
             .receive(on: RunLoop.main)
             .sink { [weak self] running in

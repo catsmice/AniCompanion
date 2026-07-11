@@ -12,12 +12,15 @@ import Foundation
 /// sentence-by-sentence MT model can't do. The trade is latency (a fraction of a second to
 /// seconds, depending on the backend/model) and cost when the backend is a paid cloud model;
 /// the controller's coalescing worker keeps a slow backend from building a backlog.
+///
+/// `history` is mutated without a lock — safe because it's only ever used by the controller's
+/// single serial translation worker (one `translate` call completes before the next begins).
 @MainActor
 final class LLMCaptionTranslator: CaptionTranslator {
 
-    private let endpoint: String
-    private let apiKey: String
-    private let model: String
+    /// The connection is read **lazily per call** (not captured at init), so a backend endpoint/key
+    /// change from Settings mid-session is picked up on the next translation without a restart.
+    private let connection: @MainActor () -> (endpoint: String, apiKey: String, model: String)
     private let systemPrompt: String
 
     /// Recent (source, translation) pairs replayed as context for consistency.
@@ -26,14 +29,12 @@ final class LLMCaptionTranslator: CaptionTranslator {
 
     private let session: URLSession
 
-    init(endpoint: String, apiKey: String, model: String, sourceName: String, targetName: String) {
-        // Match HTTPChatService's convention: base URL without a trailing slash,
-        // `/v1/chat/completions` appended.
-        var base = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-        while base.hasSuffix("/") { base.removeLast() }
-        self.endpoint = base
-        self.apiKey = apiKey
-        self.model = model
+    init(
+        connection: @escaping @MainActor () -> (endpoint: String, apiKey: String, model: String),
+        sourceName: String,
+        targetName: String
+    ) {
+        self.connection = connection
         self.systemPrompt = """
         You are a professional subtitle translator. Translate each user message from \
         \(sourceName) to \(targetName). The lines are live subtitles from audio, so they may be \
@@ -48,7 +49,11 @@ final class LLMCaptionTranslator: CaptionTranslator {
     }
 
     func translate(_ text: String) async throws -> String {
-        guard let url = URL(string: endpoint + "/v1/chat/completions") else {
+        let (rawEndpoint, apiKey, model) = connection()
+        // Match HTTPChatService's convention: base URL without a trailing slash, then append.
+        var base = rawEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        while base.hasSuffix("/") { base.removeLast() }
+        guard let url = URL(string: base + "/v1/chat/completions") else {
             throw ChatTransportError.serverError("Invalid translator endpoint")
         }
 
