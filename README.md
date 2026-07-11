@@ -50,8 +50,8 @@ is the reference backend, validated end-to-end and runnable locally.
 - **Screen vision** *(opt-in, off by default)* — let 小光 see your focused window (or whole screen) so
   she can react to what you're working on. Needs a **vision-capable model** + Screen Recording permission.
 - **Live captions** *(opt-in, off by default)* — 小光 captions the audio playing on your Mac (a video, a
-  meeting) in real time, and can **translate** it on-device as you watch (e.g. Japanese/Korean →
-  Chinese). Display-only. See [Live captions](docs/live-captions.md).
+  meeting) and can **translate** it on-device as you watch (e.g. Japanese/Korean → Chinese).
+  Display-only. See [Live captions](docs/live-captions.md).
 - **16 emotions** — emotion tags from the LLM drive the avatar's facial expressions.
 - **Proactive companion** — greets you on launch and speaks up after a quiet spell.
 - **Desktop Pet mode** — pop 小光 out into a transparent, always-on-top desktop overlay; drag to move,
@@ -61,8 +61,8 @@ is the reference backend, validated end-to-end and runnable locally.
 
 ## What's new in v0.6.0 — live captions & translation
 
-小光 can now **caption the audio playing on your Mac** — a Japanese video, a meeting, a podcast — in
-real time, and optionally **translate** it as you watch. It listens to your system audio, not your mic.
+小光 can now **caption the audio playing on your Mac** — a Japanese or Korean video, a meeting, a
+podcast — and optionally **translate** it as you watch. It listens to your system audio, not your mic.
 
 - **📺 Live captions of system audio.** She transcribes what's playing with Apple's on-device speech
   engine, shown under the character or in her pet-mode speech bubble. Display-only.

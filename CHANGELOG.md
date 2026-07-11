@@ -5,7 +5,7 @@ Release downloads and exact dates are on the [Releases](https://github.com/catsm
 
 ## v0.6.0 — live captions & translation
 
-Real-time captions of your Mac's system audio, with optional on-device translation.
+Live captions of your Mac's system audio, with optional on-device translation.
 
 - **Live captions** *(opt-in, off by default)* — 小光 transcribes the audio playing on your Mac (a
   video, a meeting) using Apple's on-device speech engine (SpeechTranscriber on macOS 26+, with an

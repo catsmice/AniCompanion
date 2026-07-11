@@ -1,7 +1,7 @@
 # Live captions & translation
 
 小光 can **listen to the audio playing on your Mac** — a video, a stream, a meeting, a podcast — and
-show it as **live captions** in real time, optionally **translating** it as you watch. It captures
+show it as **live captions**, optionally **translating** it as you watch. It captures
 **system audio** (what's coming out of your speakers), not your microphone, so it's separate from the
 [voice conversation modes](voice.md).
 
