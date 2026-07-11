@@ -94,40 +94,28 @@ struct MainView: View {
 
 // MARK: - LiveCaptionOverlay
 
-/// Caption bar over the character while live transcription runs: a persistent "listening to
-/// your Mac's audio" indicator (privacy — system audio is being captured) plus the rolling
-/// caption. In pet mode the captions render in the speech bubble instead.
+/// Caption bar over the character, shown **only while a live-transcription session is active** —
+/// downloading the one-time model, or listening + captioning. It's a status/privacy indicator for a
+/// running session, not an error surface: permission problems and other failures are reported in
+/// **Settings → Live Transcription** (with a "Grant…" button), so we never plant a persistent
+/// warning over the character for a feature the user may not be actively using. In pet mode the
+/// captions render in the speech bubble instead.
 private struct LiveCaptionOverlay: View {
 
     @ObservedObject var controller: LiveTranscriptionController
 
     var body: some View {
-        // Visible for every enabled state — running, still downloading the model (isRunning is
-        // false until the one-time download completes), or failed — so the feature is never
-        // silently "on but showing nothing."
-        if controller.isEnabled {
+        if controller.modelDownloadProgress != nil || controller.isRunning {
             VStack(spacing: 6) {
                 HStack(spacing: 5) {
-                    if controller.lastError != nil {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.yellow.opacity(0.9))
-                    } else {
-                        Image(systemName: "waveform")
-                            .font(.system(size: 10, weight: .semibold))
-                            .symbolEffect(.variableColor.iterative, options: .repeating)
-                    }
-                    if let error = controller.lastError {
-                        Text(error.localizedDescription)
-                            .font(.system(size: 10, weight: .medium))
-                    } else if let progress = controller.modelDownloadProgress {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 10, weight: .semibold))
+                        .symbolEffect(.variableColor.iterative, options: .repeating)
+                    if let progress = controller.modelDownloadProgress {
                         Text("Downloading speech model… \(Int(progress * 100))%")
                             .font(.system(size: 10, weight: .medium))
-                    } else if controller.isRunning {
-                        Text("Listening to your Mac's audio")
-                            .font(.system(size: 10, weight: .medium))
                     } else {
-                        Text("Starting live captions…")
+                        Text("Listening to your Mac's audio")
                             .font(.system(size: 10, weight: .medium))
                     }
                 }

@@ -1189,14 +1189,16 @@ private struct HandsFreeSettings: View {
 
 /// Live state of the transcription session (running / downloading / failed), shown right in the
 /// Settings section so a silent failure is visible where the user just enabled the feature.
-/// Reflects the *saved* state — after toggling, it updates on Save.
+/// Reflects the *saved* state — after toggling, it updates on Save. The **missing-permission**
+/// case is intentionally NOT reported here — the dedicated "Screen Recording permission needed"
+/// row (with a Grant… button) covers it, so we don't show two warnings for the same thing.
 private struct LiveCaptionSessionStatus: View {
 
     @ObservedObject var controller: LiveTranscriptionController
 
     var body: some View {
         Group {
-            if let error = controller.lastError {
+            if let error = controller.lastError, !Self.isPermissionError(error) {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.yellow.opacity(0.85))
@@ -1220,6 +1222,12 @@ private struct LiveCaptionSessionStatus: View {
         }
         .font(.system(size: 11))
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// The missing-Screen-Recording-permission error is shown by the dedicated permission row instead.
+    private static func isPermissionError(_ error: Error) -> Bool {
+        if case SystemAudioCaptureError.notAuthorized = error { return true }
+        return false
     }
 }
 

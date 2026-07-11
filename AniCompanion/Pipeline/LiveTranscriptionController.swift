@@ -220,11 +220,6 @@ final class LiveTranscriptionController: ObservableObject {
     /// The most recent start/stream error, for the Settings/overlay UI.
     @Published private(set) var lastError: Error?
 
-    /// Whether the feature is enabled in Settings (mirrors the saved toggle via `apply`).
-    /// Distinct from `isRunning`: enabled-but-not-running means starting, downloading the
-    /// model, or failed — states the UI must surface instead of silently showing nothing.
-    @Published private(set) var isEnabled = false
-
     // MARK: Wiring (set by AppState)
 
     /// Renders captions in the desktop-pet speech bubble.
@@ -347,7 +342,6 @@ final class LiveTranscriptionController: ObservableObject {
         target: LiveCaptionTargetLanguage,
         translator: LiveCaptionTranslatorKind
     ) {
-        isEnabled = enabled
         // Serialize onto the previous reconcile so start/stop never interleave (see `reconcileTask`).
         let previous = reconcileTask
         reconcileTask = Task { @MainActor [weak self] in
