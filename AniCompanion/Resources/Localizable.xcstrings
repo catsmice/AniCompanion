@@ -1,6 +1,12 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Paused while live captions are on — so she doesn't listen to what you're watching." : {
+      "comment" : "Settings: hands-free disabled note while live captions run",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "即時字幕開啟時已暫停——這樣她就不會聆聽你正在觀看的內容。" } }
+      }
+    },
     "Hands-free voice mode pauses while live captions run, so she doesn't listen to and reply to what you're watching." : {
       "comment" : "Settings: live transcription vs hands-free note",
       "localizations" : {

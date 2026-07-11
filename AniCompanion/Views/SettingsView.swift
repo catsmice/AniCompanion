@@ -403,25 +403,11 @@ struct SettingsView: View {
 
                     SettingsSection(title: "Speech Input", icon: "mic.fill") {
                         VStack(alignment: .leading, spacing: 14) {
-                            Toggle("Hands-free mode", isOn: $voiceHandsFreeEnabled)
-                                .toggleStyle(.switch)
-
-                            Text("Keep listening and reply automatically — just talk, no need to click the mic each time.")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.white.opacity(0.4))
-                                .fixedSize(horizontal: false, vertical: true)
-
-                            if voiceHandsFreeEnabled {
-                                Toggle("Let me interrupt her by voice", isOn: $voiceFullDuplexEnabled)
-                                    .toggleStyle(.switch)
-                                    .padding(.leading, 16)
-
-                                Text("Full-duplex: talk over her to interrupt. While she's speaking, other apps' audio is briefly quieted (needed for echo cancellation). Off: take turns and interrupt with the mic button.")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.white.opacity(0.4))
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .padding(.leading, 16)
-                            }
+                            HandsFreeSettings(
+                                handsFree: $voiceHandsFreeEnabled,
+                                fullDuplex: $voiceFullDuplexEnabled,
+                                liveTranscription: appState.liveTranscription
+                            )
 
                             Divider().background(Color.white.opacity(0.08))
 
@@ -1145,6 +1131,56 @@ struct SettingsView: View {
             }
             .pickerStyle(.menu)
             .labelsHidden()
+        }
+    }
+}
+
+// MARK: - HandsFreeSettings
+
+/// The hands-free / full-duplex voice toggles. Observes live transcription: while captions are
+/// running the two features are mutually exclusive, so the toggle is disabled and labelled
+/// "paused" rather than silently doing nothing (`AppState.applyVoiceMode` enforces the actual
+/// suppression; this just makes it visible).
+private struct HandsFreeSettings: View {
+
+    @Binding var handsFree: Bool
+    @Binding var fullDuplex: Bool
+    @ObservedObject var liveTranscription: LiveTranscriptionController
+
+    var body: some View {
+        let paused = liveTranscription.isRunning
+
+        VStack(alignment: .leading, spacing: 14) {
+            Toggle("Hands-free mode", isOn: $handsFree)
+                .toggleStyle(.switch)
+                .disabled(paused)
+
+            if paused {
+                HStack(spacing: 6) {
+                    Image(systemName: "pause.circle")
+                    Text("Paused while live captions are on — so she doesn't listen to what you're watching.")
+                }
+                .font(.system(size: 11))
+                .foregroundStyle(.white.opacity(0.55))
+                .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("Keep listening and reply automatically — just talk, no need to click the mic each time.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.4))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if handsFree && !paused {
+                Toggle("Let me interrupt her by voice", isOn: $fullDuplex)
+                    .toggleStyle(.switch)
+                    .padding(.leading, 16)
+
+                Text("Full-duplex: talk over her to interrupt. While she's speaking, other apps' audio is briefly quieted (needed for echo cancellation). Off: take turns and interrupt with the mic button.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.4))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 16)
+            }
         }
     }
 }
