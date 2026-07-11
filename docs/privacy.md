@@ -11,6 +11,7 @@ sends, so you can make an informed choice.
 | **Speech-to-text** (your voice → text) | Apple Speech framework | **On-device** |
 | **Text-to-speech** (her voice) | Apple `AVSpeechSynthesizer` | **On-device** |
 | **Screen vision** | **Off** | — |
+| **Live captions / translation** | **Off** | **On-device** when on (macOS 26; see note) |
 | **The LLM / agent** | a gateway **you run** (e.g. Hermes locally) | Wherever *you* point it |
 
 The one network dependency of a default install is **first launch** loading the three-vrm runtime from a
@@ -28,6 +29,12 @@ You only send data off your Mac if you deliberately turn one of these on:
   attached to the chat turn and sent to your **chat model** so 小光 can see it. If that model is a cloud
   provider, the screenshot goes there. Enabling it requires an in-app consent prompt **and** macOS Screen
   Recording permission.
+- **Live captions** *(off by default)* — captures your Mac's **system audio** (what's playing) and
+  transcribes it. With the defaults this is **on-device** (Apple's transcriber on macOS 26+). Two
+  exceptions send audio/text off your Mac, both your choice: on **macOS 15**, Japanese/Korean use
+  Apple's speech **servers** (zh-TW/English stay local); and the optional **LLM translation engine**
+  sends the transcript to your configured agent backend (local or cloud, per your setup). Apple's
+  on-device translation stays local. Enabling captures requires consent + Screen Recording permission.
 - **Your agent gateway** — everything you type or say (as text) goes to the gateway you configured, and
   onward to whatever model provider *you* set up behind it. Point it at a local model and the whole
   conversation stays on your machine; point it at a cloud model and your prompts go there. That choice is

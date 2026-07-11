@@ -49,6 +49,9 @@ is the reference backend, validated end-to-end and runnable locally.
   OpenAI-compatible).
 - **Screen vision** *(opt-in, off by default)* — let 小光 see your focused window (or whole screen) so
   she can react to what you're working on. Needs a **vision-capable model** + Screen Recording permission.
+- **Live captions** *(opt-in, off by default)* — 小光 captions the audio playing on your Mac (a video, a
+  meeting) in real time, and can **translate** it on-device as you watch (e.g. Japanese/Korean →
+  Chinese). Display-only. See [Live captions](docs/live-captions.md).
 - **16 emotions** — emotion tags from the LLM drive the avatar's facial expressions.
 - **Proactive companion** — greets you on launch and speaks up after a quiet spell.
 - **Desktop Pet mode** — pop 小光 out into a transparent, always-on-top desktop overlay; drag to move,
@@ -56,19 +59,21 @@ is the reference backend, validated end-to-end and runnable locally.
 - **Multilingual** — ships in **English** and **Traditional Chinese (繁體中文)**, switchable in Settings
   (interface *and* the language 小光 speaks).
 
-## What's new in v0.5.0 — speech-to-speech
+## What's new in v0.6.0 — live captions & translation
 
-Talk to 小光 and she talks back, **hands-free** — no clicking the mic, and you can **interrupt her by
-voice** just like a real conversation.
+小光 can now **caption the audio playing on your Mac** — a Japanese video, a meeting, a podcast — in
+real time, and optionally **translate** it as you watch. It listens to your system audio, not your mic.
 
-- **🍎 Apple on-device TTS — the new default.** Zero setup: no API key, no network, fully private, and
-  it works out of the box. (Cloud MiniMax/OpenAI and local BlueMagpie are still there if you prefer
-  them.) Tip: download a higher-quality system voice for a big quality bump — see
-  [Voice setup → Apple TTS](docs/voice.md#apple-on-device-default).
-- **🎙️ Hands-free mode.** She keeps listening and replies automatically — just talk, no button.
-- **🗣️ Full-duplex barge-in** *(opt-in)* — talk *over* her and she stops to listen, using acoustic
-  echo cancellation so she doesn't hear herself. (She only takes over the audio device while she's
-  actually speaking, so other apps aren't muted the rest of the time.)
+- **📺 Live captions of system audio.** She transcribes what's playing with Apple's on-device speech
+  engine, shown under the character or in her pet-mode speech bubble. Display-only.
+- **🌏 On-device translation** *(opt-in)* — translate captions as they appear (e.g. Japanese/Korean →
+  Traditional Chinese) with Apple's on-device translator, or route them through your agent backend's
+  **LLM** for context-aware quality.
+- **👀 Watching together** — while captions run, ask 小光 about what's playing and she answers from the
+  recent transcript.
+
+Off by default; needs macOS Screen Recording permission. With the defaults it's fully on-device. See
+[Live captions](docs/live-captions.md).
 
 Full history: [CHANGELOG.md](CHANGELOG.md) · [Releases](https://github.com/catsmice/AniCompanion/releases).
 
@@ -134,6 +139,7 @@ Drag to move, scroll/pinch to resize. Your conversation is untouched while she's
 ## Learn more
 
 - [**Voice setup**](docs/voice.md) — TTS & STT providers, hands-free & full-duplex modes, downloading better voices
+- [**Live captions**](docs/live-captions.md) — caption & translate the audio playing on your Mac
 - [**VRM model guide**](docs/vrm.md) — the default model, using your own, what a model needs
 - [**Hermes setup**](docs/hermes-setup.md) — the reference agent gateway, MCP tools, diagnostics
 - [**Privacy**](docs/privacy.md) — exactly what stays local and what a cloud option sends

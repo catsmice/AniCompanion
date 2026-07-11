@@ -3,6 +3,23 @@
 Notable changes per release. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 Release downloads and exact dates are on the [Releases](https://github.com/catsmice/AniCompanion/releases) page.
 
+## v0.6.0 — live captions & translation
+
+Real-time captions of your Mac's system audio, with optional on-device translation.
+
+- **Live captions** *(opt-in, off by default)* — 小光 transcribes the audio playing on your Mac (a
+  video, a meeting) using Apple's on-device speech engine (SpeechTranscriber on macOS 26+, with an
+  SFSpeechRecognizer fallback), shown under the character or in her pet-mode speech bubble.
+  Display-only. Source language is independent of the interface language; on-device models download
+  in-app on first use. Needs macOS Screen Recording permission (same as screen vision).
+- **On-device translation** *(opt-in)* — translate captions as they appear (e.g. Japanese/Korean →
+  Chinese) via Apple's Translation framework, or route them through your agent backend's **LLM** for
+  context-aware quality. Sentence-level so translations read naturally.
+- **"Watching together"** — while captions run, the recent transcript is passed as hidden context on
+  chat turns, so you can ask 小光 about what's playing and she answers from it.
+- Hands-free voice mode automatically pauses while captions run, so she doesn't hear and reply to the
+  audio you're watching.
+
 ## v0.5.0 — speech-to-speech
 
 Hands-free, interruptible voice conversation.
