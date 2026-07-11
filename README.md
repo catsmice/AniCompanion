@@ -33,7 +33,7 @@ is the reference backend, validated end-to-end and runnable locally.
 
 </div>
 
-> **Status:** functional, early-stage. Built and tested on macOS 15. Contributions welcome.
+> **Status:** functional, early-stage. Built and tested on macOS 26; runs on macOS 15+. Contributions welcome.
 
 ## Features
 
@@ -79,8 +79,10 @@ Full history: [CHANGELOG.md](CHANGELOG.md) · [Releases](https://github.com/cats
 
 ## Requirements
 
-- **macOS 15.0+**, Apple Silicon
-- **Xcode 16** (Swift 6 toolchain)
+- **macOS 15.0+**, Apple Silicon to run — *live captions & on-device translation are best on macOS 26*
+  (on macOS 15 some languages use Apple's speech servers and on-device translation is unavailable; see
+  [Live captions](docs/live-captions.md))
+- **Xcode 26** to build (Swift 6 toolchain) — the live-caption APIs are compiled against the macOS 26 SDK
 - **[XcodeGen](https://github.com/yonaskolb/XcodeGen)** — `brew install xcodegen`
 - A running **agent gateway** — [Hermes Agent](#bring-your-own-agent) is the validated path
 - *Voice and vision work with the defaults (on-device, no accounts).* Cloud providers are optional —
