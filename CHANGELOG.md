@@ -3,6 +3,14 @@
 Notable changes per release. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 Release downloads and exact dates are on the [Releases](https://github.com/catsmice/AniCompanion/releases) page.
 
+## v0.6.1
+
+- **Fix:** the live-caption overlay no longer shows a persistent "Screen Recording permission not
+  granted" warning over the character. The main-window overlay now appears only for an active
+  session (downloading the model, or listening); permission guidance lives in **Settings → Live
+  Transcription** (with a **Grant…** button), where you act on it.
+- **Fix:** removed a duplicated permission warning in the Live Transcription settings section.
+
 ## v0.6.0 — live captions & translation
 
 Live captions of your Mac's system audio, with optional on-device translation.
