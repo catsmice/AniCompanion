@@ -50,3 +50,7 @@ __pycache__/
 # Research / working notes (not for the repo)
 docs/notes/
 scripts/dev-signing-identity
+
+# Release build + DMG artifacts (scripts/build-dmg.sh)
+.build-release/
+AniCompanion-*.dmg
