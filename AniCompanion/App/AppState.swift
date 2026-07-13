@@ -88,7 +88,7 @@ final class AppState: ObservableObject {
     @AppStorage("voice_full_duplex_enabled") var voiceFullDuplexEnabled: Bool = false
 
     /// VRM model filename under Resources/VRMModel.
-    @AppStorage("vrm_model_filename") var vrmModelFilename: String = "AliciaSolid.vrm"
+    @AppStorage("vrm_model_filename") var vrmModelFilename: String = "AvatarSample_A.vrm"
 
     /// Whether 小光 may capture the screen to "see" what you're working on. Off by default;
     /// enabling it prompts for macOS Screen Recording permission (see `ScreenVisionService`).
@@ -122,7 +122,7 @@ final class AppState: ObservableObject {
 
     private var effectiveVRMModelFilename: String {
         let filename = vrmModelFilename.trimmingCharacters(in: .whitespacesAndNewlines)
-        return filename.isEmpty ? "AliciaSolid.vrm" : filename
+        return filename.isEmpty ? "AvatarSample_A.vrm" : filename
     }
 
     // MARK: - Owned Objects

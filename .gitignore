@@ -29,8 +29,11 @@ Pods/
 .LSOverride
 ._*
 
-# VRM model files (large binaries, download separately)
+# VRM model files (large binaries, download separately) — except the bundled default, which is
+# redistributable (VRoid AvatarSample_A, CC-permissive; see ATTRIBUTION.md). Alicia and any other
+# local models stay ignored (Alicia's license forbids redistribution).
 AniCompanion/Resources/VRMModel/*.vrm
+!AniCompanion/Resources/VRMModel/AvatarSample_A.vrm
 
 # API keys
 *.env

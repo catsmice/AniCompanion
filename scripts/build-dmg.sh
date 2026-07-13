@@ -58,6 +58,24 @@ APP="$DERIVED/Build/Products/Release/AniCompanion.app"
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
 echo "✓ App: $APP  (v$VERSION)"
 
+# ---- 1b. Strip non-shippable VRMs ------------------------------------------
+# The build copies Resources/VRMModel wholesale, so a locally-downloaded Alicia (or any personal
+# model you loaded) would otherwise ride along in the DMG — a license violation (Alicia forbids
+# redistribution). Keep ONLY the redistributable default; fail if it's missing.
+step "Ensuring only redistributable models are bundled"
+SHIPPABLE_VRMS=("AvatarSample_A.vrm")
+is_shippable() { local b; for b in "${SHIPPABLE_VRMS[@]}"; do [[ "$1" == "$b" ]] && return 0; done; return 1; }
+while IFS= read -r f; do
+  base="$(basename "$f")"
+  if is_shippable "$base"; then continue; fi
+  echo "  ⚠ stripping non-redistributable model: $base"
+  rm -f "$f"
+done < <(find "$APP" -iname "*.vrm")
+for ok in "${SHIPPABLE_VRMS[@]}"; do
+  find "$APP" -iname "$ok" | grep -q . || { echo "✗ shippable default '$ok' missing from bundle — run download/copy first"; exit 1; }
+done
+echo "✓ bundle contains only: ${SHIPPABLE_VRMS[*]}"
+
 # ---- 2. Sign (Developer ID + hardened runtime + secure timestamp) -----------
 step "Signing with Developer ID (hardened runtime, timestamp)"
 # No embedded frameworks/helpers, but sign deep + the main bundle to be safe.

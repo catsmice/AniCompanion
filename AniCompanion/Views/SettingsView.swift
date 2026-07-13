@@ -46,7 +46,7 @@ struct SettingsView: View {
     @State private var voiceHandsFreeEnabled: Bool = false
     @State private var voiceFullDuplexEnabled: Bool = false
     @State private var language: AppLanguage = .english
-    @State private var vrmModelFilename: String = "AliciaSolid.vrm"
+    @State private var vrmModelFilename: String = "AvatarSample_A.vrm"
 
     /// Shows the "restart to apply UI language" alert after a language change.
     @State private var showRestartAlert = false
@@ -151,7 +151,7 @@ struct SettingsView: View {
                     SettingsSection(title: "Character", icon: "person.crop.square") {
                         VStack(alignment: .leading, spacing: 14) {
                             SettingsField(label: "VRM Model Filename") {
-                                TextField("AliciaSolid.vrm", text: $vrmModelFilename)
+                                TextField("AvatarSample_A.vrm", text: $vrmModelFilename)
                                     .textFieldStyle(.plain)
                                     .font(.system(size: 13, design: .monospaced))
                                     .padding(8)
