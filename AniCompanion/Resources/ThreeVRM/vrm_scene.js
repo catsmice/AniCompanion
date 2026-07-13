@@ -117,6 +117,11 @@ const ANIM_BLEND_IN = 0.25;
 // Stored as {boneName: Quaternion} after applyRestPose()
 const restPoseRotations = {};
 
+// Finger bones held in the relaxed resting pose every frame (see enforceRelaxedFingers). The
+// pre-baked gesture clips animate fingers with flat keyframes; without this they'd flatten
+// whenever a clip plays.
+let relaxedFingerBones = [];
+
 function applyRestPose() {
     if (!vrm) return;
 
@@ -136,6 +141,57 @@ function applyRestPose() {
             node.quaternion.copy(quat);
             restPoseRotations[boneName] = quat.clone();
         }
+    }
+
+    applyRelaxedFingers();
+}
+
+// VRMs load with fingers held straight and splayed (the T-pose default), which looks stiff on
+// any bare-handed model. Curl each finger joint slightly toward the palm for a natural resting
+// hand. Stored into restPoseRotations so gesture clips override it and hands return to this
+// relaxed pose afterwards. The little/ring fingers curl a touch more than the index for a natural
+// cascade. Curl is a Z-axis rotation, mirrored L/R (SIGN); flip SIGN if fingers bend the wrong way.
+function applyRelaxedFingers() {
+    if (!vrm) return;
+    relaxedFingerBones = [];
+    const D = Math.PI / 180.0;
+    const fingers = [['Index', 0.85], ['Middle', 1.0], ['Ring', 1.15], ['Little', 1.3]];
+    const joints  = [['Proximal', 12], ['Intermediate', 18], ['Distal', 12]];
+    const sides   = [['Left', 1], ['Right', -1]];   // mirrored; curls inward toward the palm
+
+    const curl = (boneKey, angleDeg, sign) => {
+        const boneName = VRMHumanBoneName[boneKey];
+        if (!boneName) return;
+        const node = vrm.humanoid.getNormalizedBoneNode(boneName);
+        if (!node) return;
+        const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), sign * angleDeg * D);
+        node.quaternion.copy(q);
+        restPoseRotations[boneName] = q.clone();
+        relaxedFingerBones.push(boneName);
+    };
+
+    for (const [side, sign] of sides) {
+        for (const [finger, scale] of fingers) {
+            for (const [joint, deg] of joints) {
+                curl(`${side}${finger}${joint}`, deg * scale, sign);
+            }
+        }
+        // Thumb: gentler, and it rests slightly rather than curling into the palm.
+        curl(`${side}ThumbProximal`, 5, sign);
+        curl(`${side}ThumbDistal`, 5, sign);
+    }
+}
+
+// Re-assert the relaxed finger pose every frame, AFTER animation sampling, so the gesture clips'
+// flat finger keyframes don't override it. The clips are body gestures with no meaningful finger
+// motion, so keeping fingers consistently relaxed is an improvement (idle and mid-gesture match).
+function enforceRelaxedFingers() {
+    if (!vrm) return;
+    for (const boneName of relaxedFingerBones) {
+        const rest = restPoseRotations[boneName];
+        if (!rest) continue;
+        const node = vrm.humanoid.getNormalizedBoneNode(boneName);
+        if (node) node.quaternion.copy(rest);
     }
 }
 
@@ -622,6 +678,9 @@ function animate() {
 
         // Idle animations (skip bones controlled by animation)
         updateIdle(now, animatedBones);
+
+        // Keep fingers in the relaxed pose even while a gesture clip is playing.
+        enforceRelaxedFingers();
 
         // Lip sync
         updateLipSync();
