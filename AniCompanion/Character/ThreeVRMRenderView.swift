@@ -253,6 +253,14 @@ struct ThreeVRMWebView: NSViewRepresentable {
 
         // Allow file access for loading VRM model from bundle
         config.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
+        // Let the file:// scene page fetch our custom vrm:// scheme (cross-origin).
+        // NOTE: this is a private key on WKWebViewConfiguration, NOT on WKPreferences —
+        // setting it on `preferences` throws NSUnknownKeyException and crashes at launch.
+        config.setValue(true, forKey: "allowUniversalAccessFromFileURLs")
+
+        // Serve VRM models over vrm:// so they can load from the bundle OR the user-writable
+        // models directory, unconstrained by the WebView's single file read-access scope.
+        config.setURLSchemeHandler(VRMURLSchemeHandler(), forURLScheme: VRMURLSchemeHandler.scheme)
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator

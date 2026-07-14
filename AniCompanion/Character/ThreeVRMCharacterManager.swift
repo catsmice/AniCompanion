@@ -114,17 +114,15 @@ final class ThreeVRMCharacterManager: NSObject, ObservableObject, CharacterContr
         guard webView != nil else { return }
         guard let filename = pendingModelFilename else { return }
 
-        // Construct a file URL that the WKWebView can access.
-        guard let url = Bundle.main.url(
-            forResource: filename,
-            withExtension: nil,
-            subdirectory: "VRMModel"
-        ) else {
-            Log.character("[ThreeVRM] Model file not found in bundle: VRMModel/\(filename)")
+        // Resolve the model across the bundle + user-writable directory, then load it over the
+        // custom vrm:// scheme (served by VRMURLSchemeHandler) so location doesn't matter.
+        guard VRMModelStore.shared.resolve(filename: filename) != nil else {
+            Log.character("[ThreeVRM] Model file not found (bundle or user dir): \(filename)")
             return
         }
 
-        let urlString = url.absoluteString
+        let encoded = filename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? filename
+        let urlString = "\(VRMURLSchemeHandler.scheme)://model/\(encoded)"
         let js = "window.loadVRM('\(urlString)');"
         webView?.evaluateJavaScript(js) { _, error in
             if let error {
