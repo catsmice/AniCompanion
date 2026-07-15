@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 // MARK: - SettingsView
 
@@ -149,26 +151,7 @@ struct SettingsView: View {
                     // MARK: Section 1: Character
 
                     SettingsSection(title: "Character", icon: "person.crop.square") {
-                        VStack(alignment: .leading, spacing: 14) {
-                            SettingsField(label: "VRM Model Filename") {
-                                TextField("AvatarSample_A.vrm", text: $vrmModelFilename)
-                                    .textFieldStyle(.plain)
-                                    .font(.system(size: 13, design: .monospaced))
-                                    .padding(8)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(Color.white.opacity(0.06))
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                                    )
-                            }
-
-                            Text("File must exist in Resources/VRMModel.")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.white.opacity(0.4))
-                        }
+                        VRMModelPicker(selection: $vrmModelFilename)
                     }
 
                     // MARK: Section 2: Voice
@@ -1272,6 +1255,198 @@ private struct SettingsSection<Content: View>: View {
 // MARK: - SettingsField
 
 /// A labeled field within a settings section.
+// MARK: - VRMModelPicker
+
+/// Character-model chooser: a dropdown of every `.vrm` found in the bundle + the user-writable
+/// directory (deduped, default first), plus actions to import your own file or fetch Alicia Solid.
+/// The selection is the model's filename — persisted as `vrm_model_filename`.
+private struct VRMModelPicker: View {
+    @Binding var selection: String
+
+    @State private var models: [VRMModelInfo] = []
+    @State private var isDownloadingAlicia = false
+    @State private var downloadProgress: Double = 0
+    @State private var statusMessage: String?
+    @State private var isError = false
+
+    private static let aliciaFilename = "AliciaSolid.vrm"
+    // Same source as scripts/download-model.sh. For the user's own use — Alicia may not be
+    // redistributed (© DWANGO), so it's fetched on demand, never bundled.
+    private static let aliciaURL = URL(
+        string: "https://raw.githubusercontent.com/vrm-c/UniVRM/master/Tests/Models/Alicia_vrm-0.51/AliciaSolid_vrm-0.51.vrm"
+    )!
+
+    private var hasAlicia: Bool { models.contains { $0.filename == Self.aliciaFilename } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SettingsField(label: "Character Model") {
+                Picker("", selection: $selection) {
+                    ForEach(models) { model in
+                        Text(model.displayName).tag(model.filename)
+                    }
+                    // Keep an unknown/stale saved filename visible so it isn't silently dropped.
+                    if !selection.isEmpty, !models.contains(where: { $0.filename == selection }) {
+                        Text(selection).tag(selection)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    importOwnModel()
+                } label: {
+                    Label("Add your own VRM…", systemImage: "plus")
+                }
+
+                if !hasAlicia {
+                    Button {
+                        Task { await downloadAlicia() }
+                    } label: {
+                        if isDownloadingAlicia {
+                            HStack(spacing: 6) {
+                                ProgressView(value: downloadProgress).controlSize(.small)
+                                    .frame(width: 60)
+                                Text("Downloading… \(Int(downloadProgress * 100))%")
+                            }
+                        } else {
+                            Label("Download Alicia Solid", systemImage: "arrow.down.circle")
+                        }
+                    }
+                    .disabled(isDownloadingAlicia)
+                }
+            }
+            .font(.system(size: 12))
+            .controlSize(.small)
+
+            if let statusMessage {
+                Text(statusMessage)
+                    .font(.system(size: 11))
+                    .foregroundStyle(isError ? .red.opacity(0.9) : .white.opacity(0.5))
+            } else {
+                Text("Imported models are stored in Application Support. Alicia Solid (© DWANGO) is fetched for your own use only.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.4))
+            }
+        }
+        .onAppear { refresh() }
+    }
+
+    private func refresh() {
+        models = VRMModelStore.shared.availableModels()
+    }
+
+    private func importOwnModel() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [UTType(filenameExtension: "vrm") ?? .data]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let filename = try VRMModelStore.shared.importModel(from: url)
+            refresh()
+            selection = filename
+            statusMessage = nil
+        } catch {
+            isError = true
+            statusMessage = String(localized: "Couldn't import model: \(error.localizedDescription)")
+        }
+    }
+
+    @MainActor
+    private func downloadAlicia() async {
+        isDownloadingAlicia = true
+        isError = false
+        statusMessage = nil
+        downloadProgress = 0
+        defer { isDownloadingAlicia = false }
+        do {
+            // Download with progress. The mirror can be throttled to a few hundred kbps, and a
+            // bare spinner looks hung for a ~7.9 MB file. A per-task delegate on URLSession.shared
+            // doesn't deliver progress reliably, so we use a dedicated delegate-backed session.
+            let data = try await VRMDownloader.fetch(Self.aliciaURL) { fraction in
+                Task { @MainActor in downloadProgress = fraction }
+            }
+            let dest = VRMModelStore.shared.userModelsDirectory
+                .appendingPathComponent(Self.aliciaFilename)
+            try data.write(to: dest, options: .atomic)
+            refresh()
+            selection = Self.aliciaFilename
+        } catch {
+            isError = true
+            statusMessage = String(localized: "Download failed: \(error.localizedDescription)")
+        }
+    }
+}
+
+// MARK: - VRMDownloader
+
+/// Downloads a file with live progress via a dedicated delegate-backed `URLSession` (the shared
+/// session doesn't deliver `didWriteData` to a per-task delegate). Returns the bytes; the caller
+/// writes them to disk. Progress (0…1) is reported on the session's background queue.
+private final class VRMDownloader: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+
+    private let onProgress: @Sendable (Double) -> Void
+    private var continuation: CheckedContinuation<Data, Error>?
+
+    private init(onProgress: @escaping @Sendable (Double) -> Void) {
+        self.onProgress = onProgress
+    }
+
+    static func fetch(_ url: URL, onProgress: @escaping @Sendable (Double) -> Void) async throws -> Data {
+        let downloader = VRMDownloader(onProgress: onProgress)
+        let session = URLSession(configuration: .default, delegate: downloader, delegateQueue: nil)
+        defer { session.finishTasksAndInvalidate() }
+        return try await withCheckedThrowingContinuation { continuation in
+            downloader.continuation = continuation
+            session.downloadTask(with: url).resume()
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        guard totalBytesExpectedToWrite > 0 else { return }
+        onProgress(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite))
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo location: URL
+    ) {
+        // The temp file is removed once this returns, so read it here.
+        if let http = downloadTask.response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            continuation?.resume(throwing: URLError(.badServerResponse))
+            continuation = nil
+            return
+        }
+        do {
+            let data = try Data(contentsOf: location)
+            continuation?.resume(returning: data)
+        } catch {
+            continuation?.resume(throwing: error)
+        }
+        continuation = nil
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        // Fires on transport failure (didFinishDownloadingTo won't have run). On success this also
+        // fires but the continuation is already consumed, so the nil-check makes it a no-op.
+        if let error {
+            continuation?.resume(throwing: error)
+            continuation = nil
+        }
+    }
+}
+
 private struct SettingsField<Content: View>: View {
 
     let label: LocalizedStringKey
