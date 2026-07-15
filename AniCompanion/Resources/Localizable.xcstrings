@@ -1,6 +1,46 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Add your own VRM…" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "加入你自己的 VRM…" } }
+      }
+    },
+    "Character Model" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "角色模型" } }
+      }
+    },
+    "Couldn't import model: %@" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "無法匯入模型：%@" } }
+      }
+    },
+    "Download Alicia Solid" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "下載 Alicia Solid" } }
+      }
+    },
+    "Download failed — check your connection and try again." : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "下載失敗——請檢查網路連線後再試一次。" } }
+      }
+    },
+    "Download failed: %@" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "下載失敗：%@" } }
+      }
+    },
+    "Downloading…" : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "下載中…" } }
+      }
+    },
+    "Imported models are stored in Application Support. Alicia Solid (© DWANGO) is fetched for your own use only." : {
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "匯入的模型會儲存在 Application Support 資料夾。Alicia Solid（© DWANGO）僅供你個人使用而下載。" } }
+      }
+    },
     "Paused while live captions are on — so she doesn't listen to what you're watching." : {
       "comment" : "Settings: hands-free disabled note while live captions run",
       "localizations" : {

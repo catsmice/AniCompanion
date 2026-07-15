@@ -1309,7 +1309,10 @@ private struct VRMModelPicker: View {
                             HStack(spacing: 6) {
                                 ProgressView(value: downloadProgress).controlSize(.small)
                                     .frame(width: 60)
-                                Text("Downloading… \(Int(downloadProgress * 100))%")
+                                // Keep the percent out of the localized string (avoids a fragile
+                                // %lld catalog key) — the number needs no translation.
+                                Text("Downloading…")
+                                    + Text(verbatim: " \(Int(downloadProgress * 100))%")
                             }
                         } else {
                             Label("Download Alicia Solid", systemImage: "arrow.down.circle")
