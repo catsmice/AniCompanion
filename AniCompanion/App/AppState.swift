@@ -211,7 +211,7 @@ final class AppState: ObservableObject {
         let config = BackendConfig(
             endpoint: backend.savedEndpoint(),
             apiKey: backend.savedAPIKey(),
-            model: backend.defaultModel
+            model: backend.savedModel()
         )
         let ws: any ChatTransport = backend.makeTransport(config)
         self.chatTransport = ws
@@ -258,7 +258,7 @@ final class AppState: ObservableObject {
             LLMCaptionTranslator(
                 connection: {
                     let backend = ChatBackend.current
-                    return (backend.savedEndpoint(), backend.savedAPIKey(), backend.defaultModel)
+                    return (backend.savedEndpoint(), backend.savedAPIKey(), backend.savedModel())
                 },
                 sourceName: source.promptName,
                 targetName: target.promptName
