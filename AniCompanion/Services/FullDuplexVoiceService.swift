@@ -434,9 +434,10 @@ private final class DuplexCapture: @unchecked Sendable {
             // and our RMS gate need MONO, so extract channel 0 (the echo-cancelled voice channel).
             guard let mono = DuplexCapture.makeMono(from: buffer) else { return }
 
-            lock.lock(); let req = self.request; lock.unlock()
-            req?.append(mono)
-
+            // Barge-in RMS gate must measure the ORIGINAL (pre-gain) signal: the 0.05 threshold is
+            // calibrated to un-boosted levels (her echo-cancelled residual ~0.003, the user's voice
+            // 0.16–0.25). Boosting first would let a raised Mic-sensitivity push ambient noise past
+            // the gate and spuriously fire barge-in. Gate on the original, THEN boost for recognition.
             if let ch = mono.floatChannelData {
                 let n = Int(mono.frameLength)
                 if n > 0 {
@@ -445,6 +446,10 @@ private final class DuplexCapture: @unchecked Sendable {
                     onRMS((sum / Float(n)).squareRoot())
                 }
             }
+
+            MicGain.apply(to: mono)   // boost soft speech for recognition
+            lock.lock(); let req = self.request; lock.unlock()
+            req?.append(mono)
         }
 
         engine.prepare()

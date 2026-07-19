@@ -62,6 +62,7 @@ private final class STTAudioCapture: @unchecked Sendable {
         // Because this class is NOT @MainActor, the closure won't inherit main actor isolation.
         Log.stt("[STT] Installing tap on inputNode...")
         inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { buffer, _ in
+            MicGain.apply(to: buffer)   // boost soft speech before recognition
             request.append(buffer)
         }
 

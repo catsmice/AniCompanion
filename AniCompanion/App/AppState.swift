@@ -74,6 +74,10 @@ final class AppState: ObservableObject {
     /// Which STT provider to use for voice input.
     @AppStorage(STTProvider.storageKey) var sttProvider: String = STTProvider.apple.rawValue
 
+    /// Microphone input gain (1×–3×) applied to captured audio before speech recognition, so soft
+    /// speech is heard. Shared by all STT paths via `MicGain`. See `MicGain.storageKey`.
+    @AppStorage(MicGain.storageKey) var sttInputGain: Double = MicGain.defaultValue
+
     /// Per-provider STT settings.
     @AppStorage("stt_endpoint_groq") var sttEndpointGroq: String = "https://api.groq.com/openai"
     @AppStorage("stt_api_key_groq") var sttAPIKeyGroq: String = ""

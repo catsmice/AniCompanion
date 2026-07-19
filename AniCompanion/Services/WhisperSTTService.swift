@@ -230,8 +230,11 @@ private final class WhisperAudioCapture: @unchecked Sendable {
         self.outputFile = file
 
         inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { [weak self] buffer, _ in
-            try? file.write(from: buffer)
-            // Compute RMS for silence detection.
+            // Silence detection must measure the ORIGINAL (pre-gain) signal. If we boosted first,
+            // a raised Mic-sensitivity would push boosted room noise past the fixed silence
+            // threshold, so the 2 s auto-stop timer would never fire and recording would never end
+            // (and hands-free would stall on a turn that never completes). Measure, THEN boost the
+            // audio sent to Whisper.
             if let channelData = buffer.floatChannelData?[0] {
                 let frameCount = Int(buffer.frameLength)
                 var sum: Float = 0
@@ -239,6 +242,8 @@ private final class WhisperAudioCapture: @unchecked Sendable {
                 let rms = sqrtf(sum / Float(max(frameCount, 1)))
                 self?.onRMS?(rms)
             }
+            MicGain.apply(to: buffer)   // boost soft speech for the audio uploaded to Whisper
+            try? file.write(from: buffer)
         }
 
         engine.prepare()

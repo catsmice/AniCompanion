@@ -45,6 +45,7 @@ struct SettingsView: View {
     @State private var sttEndpointCompatible: String = "http://127.0.0.1:8000"
     @State private var sttAPIKeyCompatible: String = ""
     @State private var sttModelCompatible: String = "whisper-1"
+    @State private var sttInputGain: Double = MicGain.defaultValue
     @State private var voiceHandsFreeEnabled: Bool = false
     @State private var voiceFullDuplexEnabled: Bool = false
     @State private var language: AppLanguage = .english
@@ -415,6 +416,22 @@ struct SettingsView: View {
                             )
 
                             Divider().background(Color.white.opacity(0.08))
+
+                            SettingsField(label: "Mic sensitivity") {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "mic")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.white.opacity(0.4))
+                                    Slider(value: $sttInputGain, in: MicGain.range.lowerBound...MicGain.range.upperBound, step: 0.1)
+                                    Text("\(sttInputGain, specifier: "%.1f")×")
+                                        .font(.system(size: 12, design: .monospaced))
+                                        .foregroundStyle(.white.opacity(0.7))
+                                        .frame(width: 36, alignment: .trailing)
+                                }
+                            }
+                            Text("Boosts the mic so Xiaoguang hears soft speech. Raise if she misses quiet talking; lower if she picks up background noise.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.white.opacity(0.4))
 
                             SettingsField(label: "STT Provider") {
                                 Picker("", selection: $sttProvider) {
@@ -1014,6 +1031,7 @@ struct SettingsView: View {
         sttEndpointCompatible = appState.sttEndpointCompatible
         sttAPIKeyCompatible = appState.sttAPIKeyCompatible
         sttModelCompatible = appState.sttModelCompatible
+        sttInputGain = appState.sttInputGain
         voiceHandsFreeEnabled = appState.voiceHandsFreeEnabled
         voiceFullDuplexEnabled = appState.voiceFullDuplexEnabled
         language = AppLanguage.current
@@ -1069,6 +1087,7 @@ struct SettingsView: View {
         appState.sttEndpointCompatible = sttEndpointCompatible
         appState.sttAPIKeyCompatible = sttAPIKeyCompatible
         appState.sttModelCompatible = sttModelCompatible
+        appState.sttInputGain = sttInputGain
         appState.voiceHandsFreeEnabled = voiceHandsFreeEnabled
         appState.voiceFullDuplexEnabled = voiceFullDuplexEnabled
         appState.vrmModelFilename = vrmModelFilename
