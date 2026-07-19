@@ -100,11 +100,30 @@ enum ChatBackend: String, CaseIterable, Identifiable, Sendable {
         case .openAICompatible:
             return "Any OpenAI-compatible gateway (Ollama, LM Studio, vLLM, OpenRouter). The app POSTs to /v1/chat/completions on your endpoint."
         case .claudeCode:
-            return "Runs your installed Claude Code CLI — no API key, uses your Claude login. Leave Endpoint blank to auto-find `claude`, or set an absolute path to the binary."
+            return "Runs your installed Claude Code CLI — no endpoint or API key needed; uses your Claude login."
         case .codex:
-            return "Runs your installed Codex CLI — no API key, uses your ChatGPT login. Leave Endpoint blank to auto-find `codex`, or set an absolute path to the binary."
+            return "Runs your installed Codex CLI — no endpoint or API key needed; uses your ChatGPT login."
         case .gemini:
-            return "Runs your installed Gemini CLI. Usually needs a GEMINI_API_KEY (from Google AI Studio) in the API Key field — its free login tier was retired. Leave Endpoint blank to auto-find `gemini`."
+            return "Runs your installed Gemini CLI. Needs a GEMINI_API_KEY (from Google AI Studio) in the API Key field — its free login tier was retired."
+        }
+    }
+
+    /// Whether the Settings **Endpoint** field applies. HTTP backends (Hermes, OpenAI-compatible)
+    /// talk to a URL; CLI backends run a local subprocess auto-found on PATH, so the field is
+    /// hidden for them (it was only an advanced binary-path override).
+    var usesEndpoint: Bool {
+        switch self {
+        case .hermes, .openAICompatible: return true
+        case .claudeCode, .codex, .gemini: return false
+        }
+    }
+
+    /// Whether the Settings **API Key** field applies. Claude Code and Codex authenticate via the
+    /// user's existing CLI login, so no key is needed; Gemini still needs a GEMINI_API_KEY.
+    var usesAPIKey: Bool {
+        switch self {
+        case .hermes, .openAICompatible, .gemini: return true
+        case .claudeCode, .codex: return false
         }
     }
 

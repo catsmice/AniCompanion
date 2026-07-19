@@ -113,38 +113,60 @@ struct SettingsView: View {
                                 // working copy, so switching the picker swaps them automatically.
                             }
 
-                            SettingsField(label: "Endpoint") {
-                                TextField(backend.defaultEndpoint, text: endpointBinding)
-                                    .textFieldStyle(.plain)
-                                    .font(.system(size: 13, design: .monospaced))
-                                    .padding(8)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(Color.white.opacity(0.06))
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                                    )
+                            // CLI backends (Claude Code / Codex / Gemini) run a local subprocess
+                            // auto-found on PATH — no URL endpoint — so the Endpoint field is hidden
+                            // for them. Claude Code / Codex also authenticate via their own CLI
+                            // login, so the API Key field is hidden for those two (Gemini keeps it).
+                            if backend.usesEndpoint {
+                                SettingsField(label: "Endpoint") {
+                                    TextField(backend.defaultEndpoint, text: endpointBinding)
+                                        .textFieldStyle(.plain)
+                                        .font(.system(size: 13, design: .monospaced))
+                                        .padding(8)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .fill(Color.white.opacity(0.06))
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                        )
+                                }
                             }
 
-                            SettingsField(label: "API Key") {
-                                SecureField("API key (if required)", text: apiKeyBinding)
-                                    .textFieldStyle(.plain)
-                                    .font(.system(size: 13, design: .monospaced))
-                                    .padding(8)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(Color.white.opacity(0.06))
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                                    )
+                            if backend.usesAPIKey {
+                                SettingsField(label: "API Key") {
+                                    SecureField("API key (if required)", text: apiKeyBinding)
+                                        .textFieldStyle(.plain)
+                                        .font(.system(size: 13, design: .monospaced))
+                                        .padding(8)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .fill(Color.white.opacity(0.06))
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                        )
+                                }
                             }
                             Text(backend.configHint)
                                 .font(.system(size: 11))
                                 .foregroundStyle(.white.opacity(0.4))
+
+                            Button {
+                                // Close Settings, then present the wizard (avoid overlapping sheets).
+                                dismiss()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                    appState.showSetupWizard = true
+                                }
+                            } label: {
+                                Label("Re-run setup…", systemImage: "wand.and.stars")
+                            }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.purple.opacity(0.9))
+                            .padding(.top, 2)
                         }
                     }
 

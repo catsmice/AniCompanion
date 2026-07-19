@@ -73,21 +73,21 @@ enum AgentDetector {
                     case .claudeCode:
                         return DetectedAgent(
                             id: "claudeCode", backend: .claudeCode, title: "Claude Code",
-                            subtitle: "no key · uses your Claude login",
+                            subtitle: String(localized: "no key · uses your Claude login"),
                             needsAPIKey: false, endpoint: "", apiKey: "", model: ""
                         )
                     case .codex:
                         return DetectedAgent(
                             id: "codex", backend: .codex, title: "Codex",
-                            subtitle: "no key · uses your ChatGPT login",
+                            subtitle: String(localized: "no key · uses your ChatGPT login"),
                             needsAPIKey: false, endpoint: "", apiKey: "", model: ""
                         )
                     case .gemini:
                         let hasKey = ProcessInfo.processInfo.environment["GEMINI_API_KEY"]?.isEmpty == false
                         return DetectedAgent(
                             id: "gemini", backend: .gemini, title: "Gemini",
-                            subtitle: hasKey ? "GEMINI_API_KEY found in environment"
-                                             : "needs a GEMINI_API_KEY (free login tier retired)",
+                            subtitle: hasKey ? String(localized: "GEMINI_API_KEY found in environment")
+                                             : String(localized: "needs a GEMINI_API_KEY (free login tier retired)"),
                             needsAPIKey: !hasKey, endpoint: "", apiKey: "", model: ""
                         )
                     default:
@@ -109,8 +109,8 @@ enum AgentDetector {
         let key = readHermesKey()
         return DetectedAgent(
             id: "hermes", backend: .hermes, title: "Hermes Agent",
-            subtitle: key.isEmpty ? "running · enter its API key"
-                                  : "running · key auto-filled from ~/.hermes/.env",
+            subtitle: key.isEmpty ? String(localized: "running · enter its API key")
+                                  : String(localized: "running · key auto-filled from ~/.hermes/.env"),
             needsAPIKey: key.isEmpty, endpoint: endpoint, apiKey: key, model: ""
         )
     }
@@ -143,8 +143,8 @@ enum AgentDetector {
             .compactMap { $0["name"] as? String } ?? []
         return DetectedAgent(
             id: "ollama", backend: .openAICompatible, title: "Ollama",
-            subtitle: models.isEmpty ? "running · no models pulled yet"
-                                     : "\(models.count) model(s) · \(models[0])",
+            subtitle: models.isEmpty ? String(localized: "running · no models pulled yet")
+                                     : String(localized: "\(models.count) model(s) · \(models[0])"),
             needsAPIKey: false, endpoint: endpoint, apiKey: "", model: models.first ?? ""
         )
     }
@@ -157,9 +157,59 @@ enum AgentDetector {
             .compactMap { $0["id"] as? String } ?? []
         return DetectedAgent(
             id: "lmstudio", backend: .openAICompatible, title: "LM Studio",
-            subtitle: models.isEmpty ? "running" : "\(models.count) model(s) · \(models[0])",
+            subtitle: models.isEmpty ? String(localized: "running") : String(localized: "\(models.count) model(s) · \(models[0])"),
             needsAPIKey: false, endpoint: endpoint, apiKey: "", model: models.first ?? ""
         )
+    }
+
+    // MARK: - Live test-run
+
+    /// The result of a real connection test.
+    enum TestOutcome: Sendable {
+        case success
+        case failure(String)
+    }
+
+    /// Verify a backend end-to-end by actually sending a tiny turn through its transport and
+    /// awaiting the first token/done (success) or an error/timeout (failure). This is what catches
+    /// "installed but not logged in" (Gemini's retired tier, a wrong Hermes key, an Ollama with no
+    /// model) — detection alone can't. CLI backends cold-spawn, so the timeout is generous.
+    @MainActor
+    static func test(backend: ChatBackend, config: BackendConfig, timeoutSeconds: UInt64 = 45) async -> TestOutcome {
+        let transport = backend.makeTransport(config)
+        transport.connect()
+        let events = transport.events   // Sendable; safe to consume off-actor
+        defer { transport.disconnect() }
+
+        let messages: [[String: String]] = [
+            ["role": "system", "content": "You are a connection test. Reply with a single short word."],
+            ["role": "user", "content": "Say hi"],
+        ]
+        do {
+            try await transport.send(.chat(id: "setup-probe", messages: messages, images: []))
+        } catch {
+            return .failure(error.localizedDescription)
+        }
+
+        return await withTaskGroup(of: TestOutcome.self) { group in
+            group.addTask {
+                for await event in events {
+                    switch event {
+                    case .token, .done: return .success
+                    case .error(_, let message): return .failure(message)
+                    default: continue
+                    }
+                }
+                return .failure(String(localized: "The backend closed without responding."))
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: timeoutSeconds * 1_000_000_000)
+                return .failure(String(localized: "Timed out waiting for a response."))
+            }
+            let first = await group.next() ?? .failure(String(localized: "No result."))
+            group.cancelAll()
+            return first
+        }
     }
 
     // MARK: - HTTP helper

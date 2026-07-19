@@ -14,6 +14,11 @@ struct MainView: View {
     /// Whether the settings sheet is presented.
     @State private var showSettings: Bool = false
 
+    /// Drives the "no AI model connected" banner. Set true only after the transport has been
+    /// disconnected for a short grace period, so a working setup's brief launch health-check
+    /// doesn't flash the banner. Reset the instant we connect.
+    @State private var showConnectCTA: Bool = false
+
     var body: some View {
         NavigationStack {
             HStack(spacing: 0) {
@@ -58,6 +63,23 @@ struct MainView: View {
                     endPoint: .bottomTrailing
                 )
             )
+            .overlay(alignment: .top) {
+                if showConnectCTA { connectCTA }
+            }
+            .animation(.easeInOut(duration: 0.25), value: showConnectCTA)
+            // Debounced connection watch: only surface the banner after 2s of continuous
+            // disconnection, and hide it immediately on connect. `.task(id:)` cancels the pending
+            // sleep if the state flips, so a fast-connecting backend never flashes the banner.
+            .task(id: appState.isConnected) {
+                if appState.isConnected {
+                    showConnectCTA = false
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                if !Task.isCancelled && !appState.isConnected {
+                    showConnectCTA = true
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .automatic) {
                     Button {
@@ -89,6 +111,50 @@ struct MainView: View {
             .navigationTitle(Text("AI Agent | Xiaoguang", comment: "Window title — character name"))
         }
         .preferredColorScheme(.dark)
+        // Attached at the outer level (not on the same view as the Settings sheet): SwiftUI does not
+        // reliably present two `.sheet` modifiers stacked on one view, so the setup wizard lives here.
+        .sheet(isPresented: Binding(
+            get: { appState.showSetupWizard },
+            set: { appState.showSetupWizard = $0 }
+        )) {
+            SetupWizardView()
+                .environmentObject(appState)
+        }
+        .onAppear { appState.evaluateFirstRunSetup() }
+    }
+
+    // MARK: - Connect CTA
+
+    /// Prominent banner shown when no AI model is reachable (`!appState.isConnected`) — covers a
+    /// skipped first-run wizard or a backend that later stopped working. Tapping it re-opens the
+    /// setup wizard. Hidden the moment a backend connects.
+    /// Note: for CLI backends `isConnected` reflects only *binary presence* (`CLIChatService.connect`),
+    /// not login state, so this banner won't reappear if a logged-in CLI's auth later expires — the
+    /// wizard's live `AgentDetector.test` probe is what catches "installed but not logged in".
+    private var connectCTA: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(.orange)
+            Text("No AI model connected")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.white)
+            Button {
+                appState.showSetupWizard = true
+            } label: {
+                Text("Connect a model →")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(Capsule().stroke(Color.orange.opacity(0.4), lineWidth: 1))
+        .shadow(color: .black.opacity(0.25), radius: 8, y: 3)
+        .padding(.top, 14)
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 }
 

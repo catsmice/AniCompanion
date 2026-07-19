@@ -55,6 +55,13 @@ final class AppState: ObservableObject {
     /// `savedAPIKey()`), so switching backends swaps the connection rather than sharing it.
     @AppStorage(ChatBackend.storageKey) var chatBackend: String = ChatBackend.hermes.rawValue
 
+    /// Whether the first-run agent setup wizard has been completed or skipped. Existing users
+    /// (who already configured a backend) are migrated to `true` so they don't see it.
+    @AppStorage("agent_setup_completed") var agentSetupCompleted: Bool = false
+
+    /// Drives the setup-wizard sheet. Set by the first-run check or the Settings "Re-run setup" button.
+    @Published var showSetupWizard: Bool = false
+
     /// The TTS voice ID used for speech synthesis.
     @AppStorage("tts_voice_id") var ttsVoiceID: String = "Chinese (Mandarin)_Crisp_Girl"
 
@@ -387,5 +394,39 @@ final class AppState: ObservableObject {
         // Reset the initialization flag and recreate everything.
         servicesInitialized = false
         initializeServices()
+    }
+
+    // MARK: - First-run Agent Setup
+
+    /// Whether any backend already has a usable saved connection. Fresh installs have none, so the
+    /// wizard should show; existing users are migrated past it.
+    var hasConfiguredBackend: Bool {
+        let defaults = UserDefaults.standard
+        // An explicit backend choice, or any saved per-backend key/endpoint, counts as configured.
+        if defaults.string(forKey: ChatBackend.storageKey) != nil { return true }
+        return ChatBackend.allCases.contains { backend in
+            let key = defaults.string(forKey: backend.apiKeyStorageKey) ?? ""
+            let endpoint = defaults.string(forKey: backend.endpointStorageKey) ?? ""
+            return !key.isEmpty || !endpoint.isEmpty
+        }
+    }
+
+    /// Decide whether to present the wizard on launch. Call from the root view's `onAppear`.
+    /// Migrates already-configured users past it silently.
+    func evaluateFirstRunSetup() {
+        guard !agentSetupCompleted else { return }
+        if hasConfiguredBackend {
+            agentSetupCompleted = true   // existing user — don't interrupt
+        } else {
+            showSetupWizard = true
+        }
+    }
+
+    /// Persist a chosen backend + connection, mark setup done, and rebuild the transport.
+    func applyAgentSelection(backend: ChatBackend, endpoint: String, apiKey: String, model: String) {
+        backend.saveConnection(endpoint: endpoint, apiKey: apiKey, model: model.isEmpty ? nil : model)
+        chatBackend = backend.rawValue
+        agentSetupCompleted = true
+        reinitializeServices()
     }
 }
