@@ -60,6 +60,12 @@ xcodebuild -project AniCompanion.xcodeproj -scheme AniCompanion -destination 'pl
 # Fetch the default VRM model (not committed — see ATTRIBUTION.md)
 ./scripts/download-model.sh
 
+# Build a signed + notarized DMG for distribution (Developer ID cert + notarytool profile "AniCompanion")
+bash scripts/build-dmg.sh
+
+# Reset to first-run state to re-test the setup wizard (backup + SIGKILL/cfprefsd-safe); --restore to undo
+./scripts/reset-onboarding.sh
+
 # Open in Xcode
 open AniCompanion.xcodeproj
 ```
@@ -286,10 +292,18 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
 
 ## Settings (via Settings UI)
 
+- **First-run agent setup wizard** (`SetupWizardView`, v0.7.0 minimum-install; **uncommitted as of
+  2026-07-19**) — auto-presents on first launch when no backend is configured (`AppState.evaluateFirstRunSetup`
+  gates on `agentSetupCompleted` + `hasConfiguredBackend`); also re-openable via Settings → "Re-run setup…"
+  or the **"No AI model connected"** CTA banner in `MainView` (shown when `!isConnected`). Detects local
+  backends (`AgentDetector`), runs a live 1-token probe (`AgentDetector.test`) to catch "installed but not
+  logged in", then saves. The wizard `.sheet` is attached at the outer view level (see the two-`.sheet` gotcha).
 - **Agent backend** — which gateway to talk to (registered in `ChatBackend`: `hermes` default +
-  `openAICompatible` for Ollama/LM Studio/vLLM/OpenRouter)
-- **Endpoint** — selected backend's base URL (Hermes default `http://127.0.0.1:8642`)
-- **API Key** — Bearer token for the gateway (for Hermes, its `API_SERVER_KEY`)
+  `openAICompatible` for Ollama/LM Studio/vLLM/OpenRouter; CLI backends `claudeCode`/`codex`/`gemini`)
+- **Endpoint** — selected backend's base URL (Hermes default `http://127.0.0.1:8642`). **Hidden for CLI
+  backends** (`ChatBackend.usesEndpoint == false` — they auto-find their binary on PATH).
+- **API Key** — Bearer token for the gateway (for Hermes, its `API_SERVER_KEY`). **Hidden for Claude Code /
+  Codex** (`usesAPIKey == false` — they use the CLI's own login); shown for Gemini (needs `GEMINI_API_KEY`).
 - **Character → VRM Model Filename** — file under `Resources/VRMModel/` to load (default
   `AliciaSolid.vrm`); changing it reloads the three-vrm scene live (via `loadModel` →
   `loadPendingModelIfPossible`, gated on `isWebViewReady`)
@@ -306,6 +320,11 @@ User input (text or voice) → HTTP chat (Hermes) → SentenceParser → paralle
 - **Speech Input → STT Provider** (`Apple` | `Groq` | `OpenAI` | `OpenAI-compatible`):
   - Apple: on-device, no key
   - Groq / OpenAI / OpenAI-compatible: **Endpoint**, **API Key**, **Model** (Whisper)
+- **Speech Input → Mic sensitivity** *(v0.7.0, uncommitted 2026-07-19)* — 1×–3× input gain applied to
+  captured PCM *before* recognition (`MicGain`, reads `stt_input_gain`), shared by all three capture taps
+  (`STTService`, `WhisperSTTService`, `FullDuplexVoiceService`). Lifts soft/quiet speech above the RMS
+  gates and gives the recognizer a stronger signal. Capped at 3× so full-duplex's echo-cancelled residual
+  (~0.003 RMS) stays under the 0.05 barge-in gate.
 - **Language** (interface + character + STT)
 - **Screen Vision** *(off by default)* — **Let her see your screen** toggle (consent alert → Screen
   Recording permission), **Capture** scope (Focused window | Entire screen), **Glance interval** (how
@@ -351,6 +370,9 @@ it answers from the model.
 - **Vision glance "stay silent" leaks as text**: told to "say nothing," models narrate their silence (`(nothing worth adding…)`) instead of returning empty. Fix: a `[silent]` sentinel in `Persona.visionGlanceTemplate` + `ConversationController.isSilentResponse` (also catches empty and a lone bracketed aside) to suppress the whole turn.
 - **`AVSpeechSynthesizer.write` needs a live run loop on the *calling* thread**: its buffer callbacks are delivered on the run loop of whatever thread called `write`. Calling it from a background `Task` (no run loop) hangs forever — the completion never fires. `AppleTTSService`/`AppleSpeechRenderer` issues the `write` from `DispatchQueue.main.async` (the main run loop is always live in a GUI app), then resumes its `CheckedContinuation` from the callback. Verified: without this, a CLI test that blocks the main thread never gets a callback; with a running run loop it produces a valid RIFF/WAVE WAV (22050 Hz mono). A zero-length terminal buffer signals end-of-utterance.
 - **VPIO acoustic echo cancellation (full-duplex) — four hard-won constraints** (`FullDuplexVoiceService`): (1) **AEC needs one engine**: VPIO's echo canceller references *the same engine's output*, so TTS playback and the mic tap MUST share one `AVAudioEngine` with `inputNode.setVoiceProcessingEnabled(true)` — there's no API to feed a reference from a separate engine. (2) **Format-pin to the VPIO rate**: enabling VPIO forces a 48 kHz hardware rate; the mixer defaults to 44.1 kHz and `engine.start()` then fails with **-10875**. Fix: connect mixer→output *and* player→mixer explicitly at `outputNode.inputFormat` (48 kHz). (3) **The VPIO input node is MULTI-CHANNEL** (9ch mic-array here). Appending that raw buffer to `SFSpeechRecognizer` yields a permanent **err 1110 "no speech detected"** — it needs mono. Extract channel 0 (the echo-cancelled voice channel) into a fresh mono buffer before `request.append`. This was the root cause of "barge-in stops her but no text." (4) **Feed recognition continuously, ignore results while speaking**: stop-during-speech loses the barge-in's opening words (user has to repeat); a restart-on-`isFinal` loop *thrashes*. Keep one recognizer alive, append audio always, and gate result *acceptance* on `!isSpeaking` — the interrupting words are already buffered and surface the instant the RMS gate flips `isSpeaking` false. **Calibration** (logged on-device): her voice post-AEC floors at ~0.003 RMS, the user's voice hits 0.16–0.25 → `bargeInRMSThreshold = 0.05` with wide margin.
+- **Two `.sheet(isPresented:)` on the SAME view don't both present**: SwiftUI reliably drives only one sheet per view. `MainView` had the Settings sheet and the setup-wizard sheet stacked on the NavigationStack content → the wizard silently never appeared on first launch (the gate ran, `showSetupWizard` went true, but nothing showed). Fix: attach the two sheets to **different views** in the hierarchy — the wizard `.sheet` now lives at the outer level (below `.preferredColorScheme`), the Settings sheet stays inside. (Alternative: one `.sheet(item:)` with an enum.) Diagnosing this: os_log `log stream` was TCC-blocked in the agent env — writing the gate values to a `/tmp` file from inside the method was the reliable way to see them.
+- **Input gain must be applied AFTER any fixed-threshold RMS gate, never before** (`MicGain`): boosting the mic (`stt_input_gain`, 1×–3×) helps recognition of soft speech, but the silence-detection gate (`WhisperSTTService`, fixed `silenceRMSThreshold = 0.01`) and the barge-in gate (`FullDuplexVoiceService`, `bargeInRMSThreshold = 0.05`) are calibrated to *un-boosted* levels. Applying gain first pushes boosted room noise past those thresholds → Whisper auto-stop-on-silence never fires (recording never ends, hands-free stalls) and full-duplex barge-in false-triggers. Fix (both taps): **compute the RMS on the original buffer, THEN `MicGain.apply`** for the audio fed to recognition. Apple STT is unaffected (its silence timer is driven by `SFSpeechRecognizer` partials, not RMS).
+- **Resetting first-run/UserDefaults state is a minefield (non-sandboxed app + leftover container + cfprefsd)**: to make the setup wizard show again you must clear `agent_setup_completed` + `chat_backend` + every `chat_endpoint_*`/`chat_api_key_*`, but naive resets get silently undone by TWO traps: (1) a leftover sandbox **container** (`~/Library/Containers/com.anicompanion.app/…`) makes `defaults read/write com.anicompanion.app` redirect there, a no-op against the GLOBAL plist the (non-sandboxed) app actually reads; (2) **cfprefsd serves its in-memory cache to the app on launch** (ignoring your disk edit) AND a **gracefully-quit app flushes its UserDefaults back to disk**, restoring the keys you just deleted. Correct sequence: **SIGKILL the app** (`pkill -9` — no flush) → `killall cfprefsd` (drop cache) → edit the global plist with **PlistBuddy** (not `defaults`) → `rm` the stale container plist → `killall cfprefsd` → launch immediately, with **no pref reads in between**. `scripts/reset-onboarding.sh` (+ `--restore`) encodes exactly this.
 
 ## Status
 
