@@ -3,6 +3,23 @@
 Notable changes per release. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 Release downloads and exact dates are on the [Releases](https://github.com/catsmice/AniCompanion/releases) page.
 
+## v0.7.0 — easy setup & the AI you already have
+
+Getting started without editing config, and driving 小光 with a coding CLI you already use.
+
+- **Precompiled download** — a signed & notarized `.dmg` is published on the
+  [Releases](https://github.com/catsmice/AniCompanion/releases) page, so you can run AniCompanion
+  without Xcode: download, drag to Applications, open.
+- **First-run setup wizard** — on first launch, detects usable backends (a logged-in **Claude Code**
+  or **Codex**, a running **Hermes** or **Ollama / LM Studio**), runs a live connection test (catching
+  "installed but not logged in" up front), and saves your choice. Re-openable from Settings or the
+  "No AI model connected" prompt.
+- **CLI agent backends** — drive 小光 with the **Claude Code** or **Codex** CLI you're already logged
+  into: no API key, no gateway to run, it runs as a local subprocess. The Gemini CLI is also supported
+  (needs a `GEMINI_API_KEY`). Settings hides the connection fields that don't apply per backend.
+- **Mic sensitivity** — a new Settings slider boosts quiet speech before recognition, so 小光 hears you
+  even when you talk softly.
+
 ## v0.6.1
 
 - **Fix:** the live-caption overlay no longer shows a persistent "Screen Recording permission not
