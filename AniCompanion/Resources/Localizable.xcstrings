@@ -1,6 +1,264 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%lld model(s) · %@" : {
+      "comment" : "Setup wizard: agent subtitle — model count and first model name",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%lld 個模型 · %@" } }
+      }
+    },
+    "GEMINI_API_KEY found in environment" : {
+      "comment" : "Setup wizard: Gemini agent subtitle (key present)",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "已在環境變數中找到 GEMINI_API_KEY" } }
+      }
+    },
+    "needs a GEMINI_API_KEY (free login tier retired)" : {
+      "comment" : "Setup wizard: Gemini agent subtitle (key needed)",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "需要 GEMINI_API_KEY（免費登入方案已停止）" } }
+      }
+    },
+    "no key · uses your ChatGPT login" : {
+      "comment" : "Setup wizard: Codex agent subtitle",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "免金鑰 · 使用你的 ChatGPT 登入" } }
+      }
+    },
+    "no key · uses your Claude login" : {
+      "comment" : "Setup wizard: Claude Code agent subtitle",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "免金鑰 · 使用你的 Claude 登入" } }
+      }
+    },
+    "running" : {
+      "comment" : "Setup wizard: agent subtitle — running, no models",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "執行中" } }
+      }
+    },
+    "running · enter its API key" : {
+      "comment" : "Setup wizard: Hermes agent subtitle (no key)",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "執行中 · 請輸入其 API 金鑰" } }
+      }
+    },
+    "running · key auto-filled from ~/.hermes/.env" : {
+      "comment" : "Setup wizard: Hermes agent subtitle (key auto-filled)",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "執行中 · 已從 ~/.hermes/.env 自動填入金鑰" } }
+      }
+    },
+    "running · no models pulled yet" : {
+      "comment" : "Setup wizard: Ollama agent subtitle (no models)",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "執行中 · 尚未下載任何模型" } }
+      }
+    },
+    "A CLI backend may take a few seconds to start." : {
+      "comment" : "Setup wizard: testing phase note",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "CLI 後端可能需要幾秒鐘才會啟動。" } }
+      }
+    },
+    "Any OpenAI-compatible gateway (Ollama, LM Studio, vLLM, OpenRouter). The app POSTs to /v1/chat/completions on your endpoint." : {
+      "comment" : "Settings: agent backend hint (OpenAI-compatible)",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "任何相容 OpenAI 的閘道（Ollama、LM Studio、vLLM、OpenRouter）。App 會向你的端點 POST 到 /v1/chat/completions。" } }
+      }
+    },
+    "Back" : {
+      "comment" : "Setup wizard: back button",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "返回" } }
+      }
+    },
+    "Boosts the mic so Xiaoguang hears soft speech. Raise if she misses quiet talking; lower if she picks up background noise." : {
+      "comment" : "Settings: mic sensitivity help",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "提高麥克風增益，讓小光聽得見輕聲說話。若她常聽不清小聲說話請調高；若她會收到背景雜音請調低。" } }
+      }
+    },
+    "Close" : {
+      "comment" : "Setup wizard: dismiss button tooltip",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "關閉" } }
+      }
+    },
+    "Cloud model" : {
+      "comment" : "Setup wizard: title when configuring a cloud connection",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "雲端模型" } }
+      }
+    },
+    "Connect a model →" : {
+      "comment" : "Main window: button on the no-model-connected banner",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "連接模型 →" } }
+      }
+    },
+    "No AI model connected" : {
+      "comment" : "Main window: banner shown when no backend is reachable",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "尚未連接 AI 模型" } }
+      }
+    },
+    "No result." : {
+      "comment" : "Setup wizard: connection-test internal error (no outcome)",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "沒有結果。" } }
+      }
+    },
+    "The backend closed without responding." : {
+      "comment" : "Setup wizard: connection-test failure (stream ended with no reply)",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "後端未回應即關閉連線。" } }
+      }
+    },
+    "Timed out waiting for a response." : {
+      "comment" : "Setup wizard: connection-test failure (timeout)",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "連線逾時，未收到回應。" } }
+      }
+    },
+    "Connect a cloud model / API key…" : {
+      "comment" : "Setup wizard: manual cloud connection card title",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "連接雲端模型／API 金鑰…" } }
+      }
+    },
+    "Found on your Mac" : {
+      "comment" : "Setup wizard: detected-agents section header",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "在你的 Mac 上找到" } }
+      }
+    },
+    "Let's connect Xiaoguang to a model" : {
+      "comment" : "Setup wizard: header",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "為小光連接模型" } }
+      }
+    },
+    "Local Hermes Agent gateway (run `hermes gateway`); key is its API_SERVER_KEY" : {
+      "comment" : "Settings: agent backend hint (Hermes)",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "本機 Hermes Agent 閘道（執行 `hermes gateway`）；金鑰為其 API_SERVER_KEY" } }
+      }
+    },
+    "Looking for AI models on your Mac…" : {
+      "comment" : "Setup wizard: detecting phase",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "正在尋找你 Mac 上的 AI 模型…" } }
+      }
+    },
+    "Mic sensitivity" : {
+      "comment" : "Settings: mic input gain slider label",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "麥克風靈敏度" } }
+      }
+    },
+    "Model" : {
+      "comment" : "Setup wizard: model field label",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "模型" } }
+      }
+    },
+    "No local AI model was found. Connect a cloud service below, or install Claude Code / Ollama and rescan." : {
+      "comment" : "Setup wizard: no agents detected",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "找不到本機 AI 模型。請在下方連接雲端服務，或安裝 Claude Code／Ollama 後重新掃描。" } }
+      }
+    },
+    "OpenAI, OpenRouter, Groq, or any OpenAI-compatible endpoint" : {
+      "comment" : "Setup wizard: cloud connection card subtitle",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "OpenAI、OpenRouter、Groq，或任何相容 OpenAI 的端點" } }
+      }
+    },
+    "Or connect manually" : {
+      "comment" : "Setup wizard: manual connection section header",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "或手動連接" } }
+      }
+    },
+    "Re-run setup…" : {
+      "comment" : "Settings: re-open the setup wizard",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "重新執行設定…" } }
+      }
+    },
+    "Rescan" : {
+      "comment" : "Setup wizard: rescan for agents",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "重新掃描" } }
+      }
+    },
+    "Runs your installed Claude Code CLI — no endpoint or API key needed; uses your Claude login." : {
+      "comment" : "Settings: agent backend hint (Claude Code)",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "執行你已安裝的 Claude Code CLI——不需端點或 API 金鑰，會使用你的 Claude 登入。" } }
+      }
+    },
+    "Runs your installed Codex CLI — no endpoint or API key needed; uses your ChatGPT login." : {
+      "comment" : "Settings: agent backend hint (Codex)",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "執行你已安裝的 Codex CLI——不需端點或 API 金鑰，會使用你的 ChatGPT 登入。" } }
+      }
+    },
+    "Runs your installed Gemini CLI. Needs a GEMINI_API_KEY (from Google AI Studio) in the API Key field — its free login tier was retired." : {
+      "comment" : "Settings: agent backend hint (Gemini)",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "執行你已安裝的 Gemini CLI。需要在 API 金鑰欄位填入 GEMINI_API_KEY（來自 Google AI Studio）——其免費登入方案已停止。" } }
+      }
+    },
+    "Set up →" : {
+      "comment" : "Setup wizard: CTA on an agent needing an API key",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "設定 →" } }
+      }
+    },
+    "Skip for now" : {
+      "comment" : "Setup wizard: skip button",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "暫時略過" } }
+      }
+    },
+    "Start chatting" : {
+      "comment" : "Setup wizard: finish button",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "開始聊天" } }
+      }
+    },
+    "Test & Use" : {
+      "comment" : "Setup wizard: test-and-save button",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "測試並使用" } }
+      }
+    },
+    "Testing the connection…" : {
+      "comment" : "Setup wizard: testing phase",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "正在測試連線…" } }
+      }
+    },
+    "Use →" : {
+      "comment" : "Setup wizard: CTA on a ready agent",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "使用 →" } }
+      }
+    },
+    "You can change this anytime in Settings." : {
+      "comment" : "Setup wizard: done note",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "你隨時可以在設定中變更。" } }
+      }
+    },
+    "Xiaoguang is ready" : {
+      "comment" : "Setup wizard: done header",
+      "localizations" : {
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "小光準備好了" } }
+      }
+    },
     "Add your own VRM…" : {
       "localizations" : {
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "加入你自己的 VRM…" } }
