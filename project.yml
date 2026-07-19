@@ -50,8 +50,8 @@ targets:
         INFOPLIST_FILE: AniCompanion/Info.plist
         CODE_SIGN_ENTITLEMENTS: AniCompanion/AniCompanion.entitlements
         PRODUCT_NAME: AniCompanion
-        MARKETING_VERSION: "0.6.1"
-        CURRENT_PROJECT_VERSION: 7
+        MARKETING_VERSION: "0.7.0"
+        CURRENT_PROJECT_VERSION: 8
         GENERATE_INFOPLIST_FILE: false
         SWIFT_STRICT_CONCURRENCY: complete
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
